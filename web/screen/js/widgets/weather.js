@@ -1,10 +1,12 @@
-// Renders the weather block: warnings, current conditions, the next hours and the coming days.
+// Weather: warnings, current conditions, the next hours and the coming days. Parts the tile has
+// no room for are left out, smallest first (container queries in screen.css, days by measuring).
 
-import { clear, el, icon } from "./dom.js";
+import { clear, el, icon } from "../../../shared/js/dom.js";
 import {
   formatClock, formatMillimetres, formatPercent, formatSpeed, formatTemperature, isoDay, weekdayShort, zonedParts,
-} from "./format.js";
-import { strings } from "./strings.js";
+} from "../../../shared/js/format.js";
+import { panelHead, renderStatus } from "../status.js";
+import { strings } from "../strings.js";
 
 // Below this chance of rain the hourly row stays empty; "10 %" on every hour is noise.
 const SHOW_PRECIPITATION_FROM_PERCENT = 20;
@@ -12,6 +14,8 @@ const SHOW_PRECIPITATION_FROM_PERCENT = 20;
 const GUST_NOTE_FROM_KMH = 10;
 // However tall the warnings get, at least this many days of the forecast stay on screen.
 const MIN_DAYS_SHOWN = 3;
+// One hour column needs about this many rem to stay readable.
+const HOUR_COLUMN_REM = 3.4;
 
 function alertsBlock(alerts, timeZone, now) {
   const list = el("ul", "alerts");
@@ -31,7 +35,7 @@ function alertsBlock(alerts, timeZone, now) {
 function untilText(expires, timeZone, now) {
   const time = formatClock(expires, timeZone);
   const day = isoDay(expires, timeZone);
-  return day === isoDay(now, timeZone) ? `bis ${time} Uhr` : `bis ${weekdayShort(day)} ${time} Uhr`;
+  return day === isoDay(now, timeZone) ? strings.until(time) : strings.untilDay(weekdayShort(day), time);
 }
 
 function nowBlock(weather) {
@@ -78,13 +82,14 @@ function factsBlock(weather, timeZone) {
   if (weather.sun.sunrise && weather.sun.sunset) {
     const rise = formatClock(new Date(weather.sun.sunrise), timeZone);
     const set = formatClock(new Date(weather.sun.sunset), timeZone);
-    list.append(fact("sunrise", strings.sun, `${rise}\u2013${set}`));
+    list.append(fact("sunrise", strings.sun, `${rise}–${set}`));
   }
   return list;
 }
 
 function hoursBlock(hourly, timeZone) {
   const list = el("ol", "hours");
+  list.style.setProperty("--hours", String(hourly.length));
   for (const hour of hourly) {
     const item = el("li", "hour");
     const { hour: clockHour } = zonedParts(new Date(hour.time), timeZone);
@@ -124,22 +129,43 @@ function daysBlock(daily) {
   return list;
 }
 
-/** Re-renders the weather block body. `source` is the weather entry of /api/state. */
-export function renderWeather(body, source, timeZone, now) {
-  clear(body);
-  const weather = source?.data;
-  if (!weather) {
-    body.append(el("p", "placeholder", source?.error ? strings.weatherUnavailable : strings.weatherLoading));
-    return;
-  }
-  if (weather.alerts.length) body.append(alertsBlock(weather.alerts, timeZone, now));
-  body.append(nowBlock(weather));
-  body.append(factsBlock(weather, timeZone));
-  if (weather.hourly.length) body.append(hoursBlock(weather.hourly, timeZone));
-  if (weather.daily.length) {
-    const days = daysBlock(weather.daily);
-    body.append(days);
-    // Warnings take room; the forecast gives up its last days rather than run out of the panel.
-    while (days.children.length > MIN_DAYS_SHOWN && body.scrollHeight > body.clientHeight + 1) days.lastElementChild.remove();
-  }
+export function create(tile, widget, ctx) {
+  const options = widget.options;
+  const { title, status } = panelHead(tile, strings.weatherTitle(ctx.settings.location.name));
+  const body = el("div", "panel-body");
+  const source = el("p", "source-note", strings.weatherSource);
+  tile.append(body, source);
+
+  return {
+    render(state, now, reachable) {
+      const entry = state?.weather;
+      renderStatus(status, entry, now, reachable, ctx.timeZone);
+      clear(body);
+      const weather = entry?.data;
+      if (!weather) {
+        body.append(el("p", "placeholder", entry?.error ? strings.weatherUnavailable : strings.weatherLoading));
+        return;
+      }
+      title.textContent = strings.weatherTitle(weather.location);
+      if (options.showAlerts && weather.alerts.length) body.append(alertsBlock(weather.alerts, ctx.timeZone, now));
+      body.append(nowBlock(weather));
+      const facts = options.showFacts ? factsBlock(weather, ctx.timeZone) : null;
+      if (facts) body.append(facts);
+      if (options.showHourly && weather.hourly.length) {
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const fitting = Math.max(3, Math.floor(body.clientWidth / (HOUR_COLUMN_REM * rem)));
+        body.append(hoursBlock(weather.hourly.slice(0, Math.min(options.hourlyCount, fitting)), ctx.timeZone));
+      }
+      if (options.showDaily && weather.daily.length) {
+        const days = daysBlock(weather.daily.slice(0, options.dailyCount));
+        body.append(days);
+        // Warnings take room; the forecast gives up its last days rather than run out of the panel.
+        const overflowing = () => body.scrollHeight > body.clientHeight + 1;
+        while (days.children.length > MIN_DAYS_SHOWN && overflowing()) days.lastElementChild.remove();
+        // In a small tile the coming days matter more than wind and humidity.
+        if (overflowing() && facts) facts.remove();
+        if (overflowing()) days.remove();
+      }
+    },
+  };
 }

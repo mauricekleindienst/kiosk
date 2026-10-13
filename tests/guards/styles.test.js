@@ -4,10 +4,11 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const STYLES = new URL("../../web/styles/", import.meta.url);
-const sheets = readdirSync(STYLES)
-  .filter((name) => name.endsWith(".css"))
-  .map((name) => ({ name, css: readFileSync(new URL(name, STYLES), "utf8").replace(/\/\*[\s\S]*?\*\//g, "") }));
+const WEB = new URL("../../web/", import.meta.url);
+const sheets = ["shared/styles/", "screen/styles/", "admin/styles/"].flatMap((dir) =>
+  readdirSync(new URL(dir, WEB))
+    .filter((name) => name.endsWith(".css"))
+    .map((name) => ({ name: `${dir}${name}`, css: readFileSync(new URL(`${dir}${name}`, WEB), "utf8").replace(/\/\*[\s\S]*?\*\//g, "") })));
 
 function rules(css) {
   const found = [];
@@ -26,7 +27,7 @@ function rules(css) {
   return found;
 }
 
-const others = sheets.filter((sheet) => sheet.name !== "tokens.css");
+const others = sheets.filter((sheet) => !sheet.name.endsWith("tokens.css"));
 
 test("stylesheets have balanced braces and no merge markers", () => {
   for (const { name, css } of sheets) {
@@ -91,10 +92,12 @@ test("the focus ring is the neutral token", () => {
   }
 });
 
-// WCAG 2.x relative luminance and contrast ratio.
-const tokens = Object.fromEntries(
-  [...readFileSync(new URL("tokens.css", STYLES), "utf8").matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})\b/gi)].map((m) => [m[1], m[2]]),
-);
+// WCAG 2.x relative luminance and contrast ratio, for the light tokens and the admin's dark ones.
+const tokenSource = readFileSync(new URL("shared/styles/tokens.css", WEB), "utf8");
+const parseTokens = (block) => Object.fromEntries([...block.matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})\b/gi)].map((m) => [m[1], m[2]]));
+const light = parseTokens(tokenSource.slice(0, tokenSource.indexOf("@media")));
+const dark = { ...light, ...parseTokens(tokenSource.slice(tokenSource.indexOf("@media"))) };
+const THEMES = { light, dark };
 
 function luminance(hex) {
   const channel = (i) => {
@@ -104,31 +107,37 @@ function luminance(hex) {
   return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
 }
 
-function contrast(a, b) {
-  const [light, dark] = [luminance(tokens[a]), luminance(tokens[b])].sort((x, y) => y - x);
-  return (light + 0.05) / (dark + 0.05);
+function contrast(tokens, a, b) {
+  const [high, low] = [luminance(tokens[a]), luminance(tokens[b])].sort((x, y) => y - x);
+  return (high + 0.05) / (low + 0.05);
 }
 
-test("text meets WCAG AA on every background it sits on", () => {
-  const pairs = [
-    ...["--text", "--text-muted", "--text-subtle"].flatMap((text) =>
-      ["--surface", "--surface-sunken", "--bg-page"].map((bg) => [text, bg])),
-    ["--text", "--warning-soft"],
-    ["--text", "--danger-soft"],
-    ["--warning", "--warning-soft"],
-    ["--danger", "--danger-soft"],
-    ["--icon-rain", "--surface"],
-    ["--icon-rain", "--surface-sunken"],
-  ];
-  for (const [text, bg] of pairs) {
-    const ratio = contrast(text, bg);
-    assert.ok(ratio >= 4.5, `${text} on ${bg}: ${ratio.toFixed(2)}:1, needs 4.5:1`);
-  }
-});
+const TEXT_PAIRS = [
+  ...["--text", "--text-muted", "--text-subtle"].flatMap((text) =>
+    ["--surface", "--surface-sunken", "--bg-page", "--bg-active", "--bg-hover", "--highlight-soft"].map((bg) => [text, bg])),
+  ["--text", "--warning-soft"],
+  ["--text", "--danger-soft"],
+  ["--warning", "--warning-soft"],
+  ["--danger", "--danger-soft"],
+  ["--success", "--success-soft"],
+  ["--danger", "--surface"],
+  ["--icon-rain", "--surface"],
+  ["--icon-rain", "--surface-sunken"],
+  ["--button-text", "--button-bg"],
+];
 
-test("meaningful fills reach 3:1 against the panel", () => {
-  for (const fill of ["--temp-cold", "--temp-warm", "--icon-bolt", "--icon-snow", "--icon-hail", "--warning", "--danger", "--icon-rain"]) {
-    const ratio = contrast(fill, "--surface");
-    assert.ok(ratio >= 3, `${fill} on --surface: ${ratio.toFixed(2)}:1, needs 3:1`);
-  }
-});
+for (const [theme, tokens] of Object.entries(THEMES)) {
+  test(`${theme}: text meets WCAG AA on every background it sits on`, () => {
+    for (const [text, bg] of TEXT_PAIRS) {
+      const ratio = contrast(tokens, text, bg);
+      assert.ok(ratio >= 4.5, `${text} on ${bg}: ${ratio.toFixed(2)}:1, needs 4.5:1`);
+    }
+  });
+
+  test(`${theme}: meaningful fills and control borders reach 3:1 against the panel`, () => {
+    for (const fill of ["--temp-cold", "--temp-warm", "--icon-bolt", "--icon-snow", "--icon-hail", "--warning", "--danger", "--icon-rain", "--focus-ring", "--input-border"]) {
+      const ratio = contrast(tokens, fill, "--surface");
+      assert.ok(ratio >= 3, `${fill} on --surface: ${ratio.toFixed(2)}:1, needs 3:1`);
+    }
+  });
+}

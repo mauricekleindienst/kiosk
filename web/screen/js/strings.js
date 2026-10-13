@@ -2,11 +2,10 @@
 // catalog with the same keys.
 
 export const strings = {
-  timeRegion: "Uhrzeit und Datum",
   calendarWeek: (week) => `KW ${week}`,
   holidayToday: (name) => `Heute: ${name}`,
   holidayTomorrow: (name) => `Morgen: ${name}`,
-  holidayIn: (name, days) => `${name} in\u00a0${days}\u00a0Tagen`,
+  holidayIn: (name, days) => `${name} in ${days} Tagen`,
 
   weatherTitle: (place) => (place ? `Wetter in ${place}` : "Wetter"),
   weatherLoading: "Wetterdaten werden geladen…",
@@ -24,12 +23,35 @@ export const strings = {
   warningLabel: (severity) =>
     ({ minor: "Wetterwarnung", moderate: "Markante Wetterwarnung", severe: "Unwetterwarnung", extreme: "Extremes Unwetter" })[severity] ??
     "Wetterwarnung",
+  until: (time) => `bis ${time} Uhr`,
+  untilDay: (day, time) => `bis ${day} ${time} Uhr`,
 
   newsLoading: "Nachrichten werden geladen…",
   newsEmpty: "Keine aktuellen Meldungen.",
   newsUnavailable: "Nachrichten sind gerade nicht verfügbar.",
 
   stale: (time) => `Keine Verbindung – Stand ${time} Uhr`,
+
+  countdownDays: (days) => (days === 1 ? "Tag" : "Tage"),
+  countdownUntil: (label) => `bis ${label}`,
+  countdownTomorrow: (label) => `Morgen: ${label}`,
+  countdownPast: (label) => `${label} ist vorbei.`,
+  counterSince: (date) => `seit ${date}`,
+  noImages: "Noch keine Bilder ausgewählt. Bilder kommen in der Verwaltung unter „Logo und Bilder“ dazu.",
+  noLogo: "Noch kein Logo hochgeladen.",
+  dayOffset: (days) => (days === 1 ? "morgen" : days === -1 ? "gestern" : ""),
+  hoursDifference: (hours) => {
+    if (hours === 0) return "gleiche Zeit";
+    const sign = hours > 0 ? "+" : "−";
+    const value = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2 }).format(Math.abs(hours));
+    return `${sign}${value} Std.`;
+  },
+  weekShort: "KW",
+  weekdaysShort: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+
+  setupTitle: "Verwaltung einrichten",
+  setupText: "Im Firmennetz öffnen:",
+  setupCode: "Code",
 
   conditions: {
     "clear-day": "Sonnig",

@@ -1,0 +1,140 @@
+{
+  "grid": { "columns": 12, "rows": 8 },
+  "maxWidgets": 24,
+  "types": {
+    "clock": {
+      "label": "Uhr und Datum",
+      "description": "Große Uhrzeit mit Datum, Kalenderwoche und nächstem Feiertag.",
+      "size": { "w": 7, "h": 2 },
+      "minSize": { "w": 3, "h": 1 },
+      "options": [
+        { "key": "style", "label": "Darstellung", "type": "select", "default": "digital",
+          "choices": [{ "value": "digital", "label": "Digital" }, { "value": "analog", "label": "Analog" }] },
+        { "key": "showSeconds", "label": "Sekunden anzeigen", "type": "boolean", "default": false },
+        { "key": "showDate", "label": "Datum anzeigen", "type": "boolean", "default": true },
+        { "key": "showWeek", "label": "Kalenderwoche anzeigen", "type": "boolean", "default": true },
+        { "key": "showHoliday", "label": "Nächsten Feiertag anzeigen", "type": "boolean", "default": true },
+        { "key": "showLogo", "label": "Logo in der Kachel anzeigen", "type": "boolean", "default": false }
+      ]
+    },
+    "weather": {
+      "label": "Wetter",
+      "description": "Aktuelles Wetter, Warnungen und Vorhersage vom Deutschen Wetterdienst für den eingestellten Standort.",
+      "size": { "w": 5, "h": 8 },
+      "minSize": { "w": 3, "h": 2 },
+      "options": [
+        { "key": "showAlerts", "label": "Amtliche Warnungen anzeigen", "type": "boolean", "default": true },
+        { "key": "showFacts", "label": "Wind, Luftfeuchte, Niederschlag und Sonne anzeigen", "type": "boolean", "default": true },
+        { "key": "showHourly", "label": "Stündliche Vorhersage anzeigen", "type": "boolean", "default": true },
+        { "key": "hourlyCount", "label": "Anzahl Stunden", "type": "number", "default": 12, "min": 4, "max": 12 },
+        { "key": "showDaily", "label": "Tagesvorhersage anzeigen", "type": "boolean", "default": true },
+        { "key": "dailyCount", "label": "Anzahl Tage", "type": "number", "default": 7, "min": 3, "max": 7 }
+      ]
+    },
+    "news": {
+      "label": "Nachrichten",
+      "description": "Schlagzeilen aus einem RSS- oder Atom-Feed, zum Beispiel einer Google-News-Suche.",
+      "size": { "w": 7, "h": 4 },
+      "minSize": { "w": 3, "h": 2 },
+      "options": [
+        { "key": "title", "label": "Überschrift", "type": "text", "default": "Nachrichten", "maxLength": 60, "required": true },
+        { "key": "url", "label": "Feed-Adresse (RSS oder Atom)", "type": "url", "required": true,
+          "default": "https://news.google.com/rss/search?q=Rheinmetall&hl=de&gl=DE&ceid=DE:de",
+          "help": "Für eine Google-News-Suche: https://news.google.com/rss/search?q=Suchbegriff&hl=de&gl=DE&ceid=DE:de" },
+        { "key": "limit", "label": "Höchstens so viele Meldungen", "type": "number", "default": 6, "min": 1, "max": 12 },
+        { "key": "lead", "label": "Erste Meldung groß", "type": "boolean", "default": true },
+        { "key": "columns", "label": "Spalten", "type": "select", "default": "1",
+          "choices": [{ "value": "1", "label": "Eine" }, { "value": "2", "label": "Zwei" }] },
+        { "key": "showSource", "label": "Quelle anzeigen", "type": "boolean", "default": true },
+        { "key": "showAge", "label": "Alter der Meldung anzeigen", "type": "boolean", "default": true }
+      ]
+    },
+    "logo": {
+      "label": "Logo",
+      "description": "Das hochgeladene Firmenlogo, frei platzierbar.",
+      "size": { "w": 3, "h": 2 },
+      "minSize": { "w": 1, "h": 1 },
+      "options": [
+        { "key": "image", "label": "Bild", "type": "image", "default": null,
+          "help": "Leer lassen für das Logo aus „Logo und Bilder“." },
+        { "key": "padding", "label": "Rand", "type": "select", "default": "medium",
+          "choices": [{ "value": "small", "label": "Schmal" }, { "value": "medium", "label": "Mittel" }, { "value": "large", "label": "Breit" }] },
+        { "key": "align", "label": "Ausrichtung", "type": "select", "default": "center",
+          "choices": [{ "value": "left", "label": "Links" }, { "value": "center", "label": "Mitte" }, { "value": "right", "label": "Rechts" }] },
+        { "key": "panel", "label": "Auf weißer Kachel", "type": "boolean", "default": true }
+      ]
+    },
+    "message": {
+      "label": "Mitteilung",
+      "description": "Eigener Text, etwa eine Begrüßung für Besuch oder ein Hinweis an alle.",
+      "size": { "w": 5, "h": 2 },
+      "minSize": { "w": 2, "h": 1 },
+      "options": [
+        { "key": "title", "label": "Überschrift", "type": "text", "default": "Herzlich willkommen", "maxLength": 80 },
+        { "key": "body", "label": "Text", "type": "textarea", "default": "", "maxLength": 500 },
+        { "key": "size", "label": "Schriftgröße", "type": "select", "default": "normal",
+          "choices": [{ "value": "normal", "label": "Normal" }, { "value": "large", "label": "Groß" }, { "value": "huge", "label": "Sehr groß" }] },
+        { "key": "align", "label": "Ausrichtung", "type": "select", "default": "left",
+          "choices": [{ "value": "left", "label": "Links" }, { "value": "center", "label": "Mitte" }] },
+        { "key": "highlight", "label": "Farbig hinterlegen", "type": "boolean", "default": false }
+      ]
+    },
+    "countdown": {
+      "label": "Countdown",
+      "description": "Tage bis zu einem Termin, etwa dem Sommerfest.",
+      "size": { "w": 4, "h": 2 },
+      "minSize": { "w": 2, "h": 1 },
+      "options": [
+        { "key": "label", "label": "Bezeichnung", "type": "text", "default": "Sommerfest", "maxLength": 60 },
+        { "key": "date", "label": "Datum", "type": "date", "default": null, "required": true },
+        { "key": "afterText", "label": "Text am Tag selbst", "type": "text", "default": "Heute ist es so weit", "maxLength": 60 }
+      ]
+    },
+    "worldclock": {
+      "label": "Weltzeit",
+      "description": "Uhrzeiten an anderen Standorten.",
+      "size": { "w": 4, "h": 3 },
+      "minSize": { "w": 2, "h": 1 },
+      "options": [
+        { "key": "zones", "label": "Standorte", "type": "zones", "maxItems": 6,
+          "default": [
+            { "label": "New York", "timeZone": "America/New_York" },
+            { "label": "London", "timeZone": "Europe/London" },
+            { "label": "Tokio", "timeZone": "Asia/Tokyo" }
+          ] }
+      ]
+    },
+    "calendar": {
+      "label": "Kalender",
+      "description": "Der aktuelle Monat mit heute, Wochenenden und Feiertagen in Hessen.",
+      "size": { "w": 4, "h": 4 },
+      "minSize": { "w": 3, "h": 3 },
+      "options": [
+        { "key": "showWeekNumbers", "label": "Kalenderwochen anzeigen", "type": "boolean", "default": true },
+        { "key": "showHolidays", "label": "Feiertage anzeigen", "type": "boolean", "default": true }
+      ]
+    },
+    "slideshow": {
+      "label": "Bilder",
+      "description": "Hochgeladene Bilder im Wechsel.",
+      "size": { "w": 5, "h": 4 },
+      "minSize": { "w": 2, "h": 2 },
+      "options": [
+        { "key": "images", "label": "Bilder", "type": "images", "default": [], "maxItems": 30 },
+        { "key": "seconds", "label": "Sekunden pro Bild", "type": "number", "default": 15, "min": 5, "max": 600 },
+        { "key": "fit", "label": "Bildausschnitt", "type": "select", "default": "cover",
+          "choices": [{ "value": "cover", "label": "Kachel füllen" }, { "value": "contain", "label": "Ganzes Bild" }] }
+      ]
+    },
+    "counter": {
+      "label": "Tage seit",
+      "description": "Zählt die Tage seit einem Datum, etwa „Tage ohne Arbeitsunfall“.",
+      "size": { "w": 4, "h": 2 },
+      "minSize": { "w": 2, "h": 1 },
+      "options": [
+        { "key": "label", "label": "Bezeichnung", "type": "text", "default": "Tage ohne Arbeitsunfall", "maxLength": 60 },
+        { "key": "since", "label": "Seit", "type": "date", "default": null, "required": true }
+      ]
+    }
+  }
+}

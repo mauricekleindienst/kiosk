@@ -1,9 +1,14 @@
 # Kiosk
 
-Der Büro-Bildschirm für einen Raspberry Pi: große Uhr mit Datum, Kalenderwoche und nächstem
-Feiertag in Hessen, Wetter für Kassel vom Deutschen Wetterdienst (mit amtlichen Warnungen,
-12-Stunden- und 7-Tage-Vorschau) und die aktuellen Nachrichten zu Rheinmetall sowie zu Kassel und
-der Region. Helles, ruhiges Design im Vollbild, passend für 720p bis 4K, quer und hochkant.
+Der Büro-Bildschirm für einen Raspberry Pi, im hellen, ruhigen Design und im Vollbild, passend für
+720p bis 4K, quer und hochkant. Was er zeigt und wo, stellst du in der **Verwaltung** ein, die
+jedes Gerät im Firmennetz im Browser öffnen kann (Computer, Tablet, Handy).
+
+**Kacheln:** Uhr und Datum (digital oder analog, mit Kalenderwoche und nächstem Feiertag in
+Hessen), Wetter vom Deutschen Wetterdienst (amtliche Warnungen, Stunden- und 7-Tage-Vorschau),
+Nachrichten aus beliebig vielen RSS-Feeds (Standard: Rheinmetall und Kassel), Firmenlogo,
+Mitteilung (etwa eine Begrüßung für Besuch), Countdown, Weltzeit, Monatskalender, Bilder im
+Wechsel und „Tage seit“ (etwa ohne Arbeitsunfall).
 
 Auf dem Pi läuft nur, was Raspberry Pi OS ohnehin mitbringt: Python 3 und Chromium. Kein Node,
 kein pip, keine API-Schlüssel.
@@ -35,73 +40,92 @@ Erneut ausführen ist unbedenklich. Zum Entfernen: `./scripts/uninstall.sh`.
 Chromium schließen (`Alt+F4`) öffnet ihn nach 5 Sekunden wieder; das ist Absicht. Für Wartung am
 Desktop: `./scripts/uninstall.sh` und neu starten, danach `./scripts/install.sh` wieder ausführen.
 
-### Aktualisieren
+## Verwaltung
+
+Beim ersten Start zeigt der Bildschirm unten einen Hinweis mit der Adresse der Verwaltung,
+etwa `http://raspberrypi.local:8081`, und einem sechsstelligen Code. Öffne die Adresse auf einem
+Gerät im selben Netz, gib den Code ein und lege ein Passwort fest. Danach verschwindet der Hinweis.
+Nur wer vor dem Bildschirm steht, kann die Verwaltung also einrichten.
+
+- **Layout:** Kacheln in einem Raster von 12 × 8 Feldern verschieben (ziehen) und in der Größe
+  ändern (Ecke unten rechts ziehen). Mit der Tastatur: Pfeiltasten verschieben,
+  Umschalt+Pfeiltasten ändern die Größe, Entf entfernt. Rechts stellst du die gewählte Kachel ein.
+  Neue Kacheln und fertige Vorlagen (Standard, Nachrichten im Fokus, Empfang, Werk und Produktion,
+  Hochformat, Übersicht) stehen darunter. „Vorschau“ zeigt den Bildschirm, wie er gerade aussieht.
+- **Logo und Bilder:** Firmenlogo und Bilder hochladen (PNG, JPEG, WebP, GIF, SVG, bis 8 MB). Das
+  Logo erscheint als eigene Kachel (frei platzierbar und skalierbar) oder in der Uhr-Kachel.
+- **Einstellungen:** Standort für das Wetter (mit Ortsliste), Zeitzone, Schriftgröße, Abstände,
+  Nachtabschaltung (zum Beispiel 19–7 Uhr und am Wochenende), Uhrzeit des nächtlichen Neuladens.
+- **Gerät:** ob der Bildschirm verbunden ist, Stand der Datenquellen, Daten jetzt aktualisieren,
+  Bildschirm neu laden, Passwort ändern.
+
+Jede Änderung gilt sofort, der Bildschirm übernimmt sie innerhalb von drei Sekunden. Unten
+erscheint jeweils „Rückgängig“.
+
+**Sicherheit:** Die Verwaltung ist nur im lokalen Netz erreichbar, über HTTP (ohne Verschlüsselung,
+wie bei den meisten Geräten im Büronetz). Passwort mit scrypt gespeichert, Anmeldung mit Sperre
+nach Fehlversuchen, Schutz gegen Anfragen von fremden Seiten, Uploads werden auf ihren Inhalt
+geprüft. Der Bildschirm selbst ist nur auf dem Pi erreichbar (`127.0.0.1`).
+
+**Passwort vergessen?** Auf dem Pi `rm ~/.config/kiosk/admin.json && systemctl --user restart
+kiosk`; danach zeigt der Bildschirm einen neuen Code.
+
+**Verwaltung abschalten:** in `~/.config/kiosk/config.json` `{"adminPort": null}` eintragen und
+den Dienst neu starten.
+
+## Aktualisieren
 
 ```bash
 cd ~/kiosk && git pull && systemctl --user restart kiosk
 ```
 
-Die Seite lädt sich jede Nacht um 3:30 Uhr selbst neu und übernimmt dabei neue Oberflächen-Dateien.
+Danach in der Verwaltung unter „Gerät“ auf „Bildschirm neu laden“, oder bis zum nächtlichen
+Neuladen warten.
 
-## Einstellungen
+## Datei-Einstellungen (optional)
 
-Alles funktioniert ohne Einstellungen. Wer etwas ändern will, legt `~/.config/kiosk/config.json`
-an. Darin stehen nur die Werte, die von `config.default.json` abweichen, zum Beispiel:
-
-```json
-{
-  "location": { "name": "Unterlüß", "lat": 52.8333, "lon": 10.2833 },
-  "news": {
-    "main": { "title": "Rheinmetall", "limit": 6 },
-    "side": {
-      "title": "Hessen",
-      "url": "https://news.google.com/rss/search?q=Hessen&hl=de&gl=DE&ceid=DE:de"
-    }
-  }
-}
-```
-
-Danach `systemctl --user restart kiosk`. Ist die Datei fehlerhaft, startet der Dienst nicht und
-sagt im Log, welcher Wert falsch ist: `journalctl --user -u kiosk`.
+Fast alles stellst du in der Verwaltung ein; gespeichert wird es in `~/.config/kiosk/settings.json`.
+Für die Technik gibt es `~/.config/kiosk/config.json`. Darin stehen nur die Werte, die von
+`config.default.json` abweichen, danach `systemctl --user restart kiosk`:
 
 | Schlüssel | Bedeutung |
 |---|---|
-| `location` | Ort für das Wetter (Name, Breite, Länge) |
-| `news.main`, `news.side` | Titel, Feed-Adresse (RSS oder Atom) und Höchstzahl der Meldungen für den großen und den kleinen Nachrichtenblock |
-| `news.maxAgeDays` | ältere Meldungen werden nicht gezeigt |
+| `port` | Port des Bildschirms (nur auf `127.0.0.1` erreichbar) |
+| `adminHost`, `adminPort` | wo die Verwaltung erreichbar ist; `adminPort: null` schaltet sie ab |
 | `weather.refreshMinutes`, `news.refreshMinutes` | wie oft neu geladen wird |
-| `display.reloadAt` | Uhrzeit des nächtlichen Neuladens |
-| `port` | lokaler Port des Datenservers (nur auf `127.0.0.1` erreichbar) |
+| `news.maxAgeDays` | ältere Meldungen werden nicht gezeigt |
+| `location`, `news.main`, `news.side`, `display.reloadAt` | nur für das allererste Layout, bevor in der Verwaltung etwas gespeichert wurde |
 
-Es werden nur so viele Meldungen gezeigt, wie vollständig auf den Bildschirm passen.
+Ist die Datei fehlerhaft, startet der Dienst nicht und sagt im Log, welcher Wert falsch ist:
+`journalctl --user -u kiosk`.
 
 ## Datenquellen
 
 - **Wetter und Warnungen:** Deutscher Wetterdienst (Open Data, MOSMIX und Messstationen) über
   die freie [Bright Sky API](https://brightsky.dev). Kein Schlüssel nötig, kommerzielle Nutzung
   erlaubt, Quellenangabe steht auf dem Bildschirm.
-- **Nachrichten:** RSS-Feeds der Google-News-Suche (Standard: „Rheinmetall“ und „Kassel“).
-  Jeder andere RSS- oder Atom-Feed geht ebenfalls.
+- **Nachrichten:** RSS-Feeds der Google-News-Suche (Standard: „Rheinmetall“ und „Kassel“). Jeder
+  andere RSS- oder Atom-Feed geht ebenfalls; die Adresse trägst du in der Nachrichten-Kachel ein.
 - **Feiertage, Sonnenauf- und -untergang:** werden lokal berechnet.
 
-Fällt eine Quelle aus, bleibt der letzte Stand stehen und der Block zeigt dezent
+Fällt eine Quelle aus, bleibt der letzte Stand stehen und die Kachel zeigt dezent
 „Keine Verbindung – Stand 09:41 Uhr“. Der letzte Stand übersteht auch einen Neustart ohne Netz.
 
 ## Entwicklung
 
 ```bash
 npm ci                       # nur für die Tests (Playwright)
-npm run test:server          # Python: Server, Feeds, Wetter, Konfiguration
+npm run test:server          # Python: Server, Einstellungen, Anmeldung, Uploads, Schnittstellen
 npm run test:scripts         # Installations- und Startskripte mit Platzhaltern
-npm run test:unit            # Formatierung, Feiertage, Design-Regeln, Kontrast
-npm run test:e2e             # echte Seite in Chromium, 6 Bildschirmgrößen
+npm run test:unit            # Formatierung, Feiertage, Raster, Design-Regeln, Kontrast, Texte
+npm run test:e2e             # Bildschirm und Verwaltung in Chromium, 6 Bildschirmgrößen
 shellcheck scripts/*.sh
 ```
 
-Lokal ansehen mit Beispieldaten (ohne Internet): `node tests/e2e/serve.mjs`, dann
-http://127.0.0.1:8199 öffnen. Mit echten Daten: `cd server && python3 -m kiosk`, dann
-http://127.0.0.1:8080.
+Lokal ansehen mit Beispieldaten (ohne Internet): `node tests/e2e/serve.mjs`, dann Bildschirm
+http://127.0.0.1:8199 und Verwaltung http://127.0.0.1:8198. Mit echten Daten:
+`cd server && python3 -m kiosk`, dann http://127.0.0.1:8080 und http://127.0.0.1:8081.
 
 Aufbau und Entscheidungen: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-Schrift: [Inter](https://rsms.me/inter/) (SIL Open Font License, `web/fonts/OFL.txt`).
+Schrift: [Inter](https://rsms.me/inter/) (SIL Open Font License, `web/shared/fonts/OFL.txt`).

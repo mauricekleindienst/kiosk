@@ -1,133 +1,182 @@
-// Boots the screen: the clock ticks locally, the data comes from the kiosk server every minute.
+// Boots the screen: builds the tiles from the settings, ticks the clocks locally and asks the
+// kiosk server every few seconds whether settings or data changed.
 
-import { formatClock, formatLongDate, isoDay, isoWeek, zonedParts } from "./format.js";
-import { nextHoliday } from "./holidays.js";
-import { renderNews } from "./news-view.js";
-import { renderStatus } from "./status.js";
+import { el } from "../../shared/js/dom.js";
+import { zonedParts } from "../../shared/js/format.js";
 import { strings } from "./strings.js";
-import { renderWeather } from "./weather-view.js";
+import { WIDGETS } from "./widgets/index.js";
 
-const POLL_MS = 60_000;
+// A tiny local request; settings from the admin interface show up within this time.
+const REVISION_POLL_MS = 3_000;
+// The full state also comes once a minute, so ages and stale notices stay current.
+const STATE_POLL_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const CLOCK_TICK_MS = 1_000;
 // The daily reload clears whatever a browser accumulates over weeks; never right after a start.
 const MIN_UPTIME_BEFORE_RELOAD_MS = 60 * 60_000;
 const DEFAULT_TIME_ZONE = "Europe/Berlin";
+// The screen itself reports its size, so the admin preview matches it; the preview does not.
+const IS_PREVIEW = location.pathname.startsWith("/screen/");
 
-const $ = (id) => document.getElementById(id);
-const nodes = {
-  timePanel: $("time-panel"),
-  clock: $("clock"),
-  date: $("date"),
-  dateMeta: $("date-meta"),
-  weatherTitle: $("weather-title"),
-  weatherStatus: $("weather-status"),
-  weatherBody: $("weather-body"),
-  weatherSource: $("weather-source"),
-  mainTitle: $("news-main-title"),
-  mainStatus: $("news-main-status"),
-  mainBody: $("news-main-body"),
-  sideTitle: $("news-side-title"),
-  sideStatus: $("news-side-status"),
-  sideBody: $("news-side-body"),
-};
-
+const screenNode = document.getElementById("screen");
+const overlay = document.getElementById("overlay");
 const startedAt = Date.now();
+
 let state = null;
-let serverReachable = true;
+let revision = null;
+let reachable = true;
+let tiles = [];
 let lastMinute = "";
+let builtFor = null;
 
-function timeZone() {
-  return state?.timeZone ?? DEFAULT_TIME_ZONE;
+const timeZone = () => state?.settings?.timeZone ?? DEFAULT_TIME_ZONE;
+const uploadUrl = (id) => `/uploads/${encodeURIComponent(id)}`;
+
+async function getJson(path) {
+  const response = await fetch(path, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json();
 }
 
-function setText(node, text) {
-  if (node.textContent !== text) node.textContent = text;
+function applyAppearance(settings) {
+  const root = document.documentElement;
+  root.style.setProperty("--scale", String(settings.appearance.scale / 100));
+  root.dataset.density = settings.appearance.density;
 }
 
-function renderDate(now) {
-  const tz = timeZone();
-  const today = isoDay(now, tz);
-  setText(nodes.date, formatLongDate(now, tz));
-  const holiday = nextHoliday(today);
-  let holidayText;
-  if (holiday.daysUntil === 0) holidayText = strings.holidayToday(holiday.name);
-  else if (holiday.daysUntil === 1) holidayText = strings.holidayTomorrow(holiday.name);
-  else holidayText = strings.holidayIn(holiday.name, holiday.daysUntil);
-  setText(nodes.dateMeta, `${strings.calendarWeek(isoWeek(today))} · ${holidayText}`);
+function build() {
+  for (const tile of tiles) tile.instance.destroy?.();
+  tiles = [];
+  screenNode.replaceChildren();
+  const settings = state.settings;
+  applyAppearance(settings);
+  const ctx = { settings, timeZone: settings.timeZone, uploadUrl };
+  for (const widget of settings.widgets) {
+    const module = WIDGETS[widget.type];
+    if (!module) continue;
+    const tile = el("section", `tile tile-${widget.type}`);
+    tile.dataset.widget = widget.id;
+    // Small tiles get less padding (screen.css); container queries cannot style the container itself.
+    tile.dataset.rows = String(widget.h);
+    tile.dataset.cols = String(widget.w);
+    // Grid placement through the CSSOM; the CSP forbids style attributes, not this.
+    tile.style.gridColumn = `${widget.x + 1} / span ${widget.w}`;
+    tile.style.gridRow = `${widget.y + 1} / span ${widget.h}`;
+    screenNode.append(tile);
+    tiles.push({ widget, tile, instance: module.create(tile, widget, ctx) });
+  }
+  builtFor = state.revision.settings;
+  const now = new Date();
+  for (const { instance } of tiles) instance.tick?.(now);
+  renderData(now);
 }
-
-// Shown until the first answer from the server: every block says it is loading.
-const NOTHING_YET = {
-  weather: { data: null, error: null },
-  news: { main: { title: "", data: null, error: null }, side: { title: "", data: null, error: null } },
-};
 
 function renderData(now) {
-  const tz = timeZone();
-  const { weather, news } = state ?? NOTHING_YET;
-  setText(nodes.weatherTitle, strings.weatherTitle(weather.data?.location ?? ""));
-  renderStatus(nodes.weatherStatus, weather, now, serverReachable, tz);
-  renderWeather(nodes.weatherBody, weather, tz, now);
-  // The regional block sizes itself; the main news then fills what is left, so it renders last.
-  setText(nodes.sideTitle, news.side.title);
-  renderStatus(nodes.sideStatus, news.side, now, serverReachable, tz);
-  renderNews(nodes.sideBody, news.side, now);
-  setText(nodes.mainTitle, news.main.title);
-  renderStatus(nodes.mainStatus, news.main, now, serverReachable, tz);
-  renderNews(nodes.mainBody, news.main, now, { lead: true });
+  for (const { instance } of tiles) instance.render(state, now, reachable);
+}
+
+function sleeping(now) {
+  const sleep = state?.settings?.display?.sleep;
+  if (!sleep?.enabled) return false;
+  const parts = zonedParts(now, timeZone());
+  const weekday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+  if (sleep.weekends && (weekday === 0 || weekday === 6)) return true;
+  const minutes = parts.hour * 60 + parts.minute;
+  const [fromH, fromM] = sleep.from.split(":").map(Number);
+  const [toH, toM] = sleep.to.split(":").map(Number);
+  const from = fromH * 60 + fromM;
+  const to = toH * 60 + toM;
+  // A window like 19:00-07:00 crosses midnight.
+  return from <= to ? minutes >= from && minutes < to : minutes >= from || minutes < to;
+}
+
+function renderOverlay(now) {
+  const setup = !IS_PREVIEW && state?.setup;
+  const asleep = !IS_PREVIEW && sleeping(now);
+  document.body.classList.toggle("asleep", asleep);
+  overlay.hidden = !setup || asleep;
+  if (overlay.hidden) {
+    overlay.replaceChildren();
+    return;
+  }
+  const code = `${setup.code.slice(0, 3)} ${setup.code.slice(3)}`;
+  const text = el("div", "overlay-text");
+  text.append(el("p", "overlay-title", strings.setupTitle));
+  text.append(el("p", "overlay-line", `${strings.setupText} ${setup.urls.join(" oder ")}`));
+  const codeBlock = el("div", "overlay-code");
+  codeBlock.append(el("span", "overlay-code-label", strings.setupCode), el("span", "overlay-code-value", code));
+  overlay.replaceChildren(text, codeBlock);
 }
 
 async function maybeReload(now) {
-  const reloadAt = state?.display?.reloadAt;
-  if (!reloadAt || Date.now() - startedAt < MIN_UPTIME_BEFORE_RELOAD_MS) return;
+  const reloadAt = state?.settings?.display?.reloadAt;
+  if (IS_PREVIEW || !reloadAt || Date.now() - startedAt < MIN_UPTIME_BEFORE_RELOAD_MS) return;
   const { hour, minute } = zonedParts(now, timeZone());
   if (`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}` !== reloadAt) return;
   // Reloading while the server is down would leave Chromium on an error page for good.
   try {
-    const response = await fetch("/api/health", { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-    if (response.ok) location.reload();
+    await getJson("api/health");
+    location.reload();
   } catch {
     // Server unreachable: keep the page; tomorrow is the next chance.
   }
 }
 
-// Ticks every second but touches the page only when the minute changes, so the screen stays idle.
 function tick() {
   const now = new Date();
-  setText(nodes.clock, formatClock(now, timeZone()));
-  const minute = `${isoDay(now, timeZone())} ${formatClock(now, timeZone())}`;
+  for (const { instance } of tiles) instance.tick?.(now);
+  const minute = `${now.getUTCHours()}:${now.getUTCMinutes()}`;
   if (minute !== lastMinute) {
     lastMinute = minute;
-    renderDate(now);
-    renderData(now);
+    if (state) renderData(now);
+    renderOverlay(now);
     maybeReload(now);
   }
 }
 
-async function poll() {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+async function loadState() {
   try {
-    const response = await fetch("/api/state", { cache: "no-store", signal: controller.signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    state = await response.json();
-    serverReachable = true;
+    state = await getJson("api/state");
+    reachable = true;
   } catch {
     // The server restarts itself; until then the last data stays up with a stale notice.
-    serverReachable = false;
-  } finally {
-    clearTimeout(timer);
+    reachable = false;
   }
-  renderData(new Date());
+  if (!state) return;
+  if (builtFor !== state.revision.settings) build();
+  else renderData(new Date());
+  renderOverlay(new Date());
 }
 
-nodes.timePanel.setAttribute("aria-label", strings.timeRegion);
-nodes.weatherSource.textContent = strings.weatherSource;
+async function pollRevision() {
+  const size = IS_PREVIEW ? "" : `?w=${innerWidth}&h=${innerHeight}`;
+  let next;
+  try {
+    next = await getJson(`api/revision${size}`);
+  } catch {
+    if (reachable) {
+      reachable = false;
+      if (state) renderData(new Date());
+    }
+    return;
+  }
+  const previous = revision;
+  revision = next;
+  if (previous && next.reload !== previous.reload) {
+    location.reload();
+    return;
+  }
+  const changed = ["settings", "data", "setup"].some((key) => next[key] !== previous?.[key]);
+  if (!reachable || !previous || changed) await loadState();
+}
+
+// What fits depends on the final font and the window size; lay out again when either changes.
+document.fonts.ready.then(() => state && renderData(new Date()));
+addEventListener("resize", () => state && build());
+
 tick();
 setInterval(tick, CLOCK_TICK_MS);
-// What fits depends on the final font and the window size; lay out again when either changes.
-document.fonts.ready.then(() => renderData(new Date()));
-addEventListener("resize", () => renderData(new Date()));
-poll();
-setInterval(poll, POLL_MS);
+// The first revision request also tells the admin interface right away that the screen is up.
+loadState().then(pollRevision);
+setInterval(pollRevision, REVISION_POLL_MS);
+setInterval(loadState, STATE_POLL_MS);

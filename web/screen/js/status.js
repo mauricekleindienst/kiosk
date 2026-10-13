@@ -1,7 +1,7 @@
 // Decides whether a block's data is too old to be trusted, and says so in one quiet line.
 
-import { el, icon } from "./dom.js";
-import { formatClock } from "./format.js";
+import { el, icon } from "../../shared/js/dom.js";
+import { formatClock } from "../../shared/js/format.js";
 import { strings } from "./strings.js";
 
 // Data counts as stale after three missed refreshes; one late refresh is normal.
@@ -25,4 +25,15 @@ export function renderStatus(node, source, now, serverReachable, timeZone) {
     icon("offline", "status-icon"),
     el("span", null, strings.stale(formatClock(new Date(source.fetchedAt), timeZone))),
   );
+}
+
+/** A panel head with a title and a place for the stale notice. */
+export function panelHead(tile, titleText) {
+  const head = el("header", "panel-head");
+  const title = el("h2", "panel-title", titleText);
+  const status = el("p", "status");
+  status.hidden = true;
+  head.append(title, status);
+  tile.append(head);
+  return { title, status };
 }

@@ -5,47 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title>Kiosk</title>
-    <link rel="preload" href="/fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="/styles/fonts.css">
-    <link rel="stylesheet" href="/styles/tokens.css">
-    <link rel="stylesheet" href="/styles/app.css">
-    <script type="module" src="/js/main.js"></script>
+    <link rel="preload" href="/shared/fonts/inter-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/shared/styles/fonts.css">
+    <link rel="stylesheet" href="/shared/styles/tokens.css">
+    <link rel="stylesheet" href="styles/screen.css">
+    <script type="module" src="js/main.js"></script>
   </head>
   <body>
-    <main class="screen">
-      <div class="column column-main">
-        <section class="panel panel-time" id="time-panel">
-          <p class="clock" id="clock">--:--</p>
-          <div class="date-block">
-            <p class="date" id="date"></p>
-            <p class="date-meta" id="date-meta"></p>
-          </div>
-        </section>
-        <section class="panel panel-news panel-news-main" aria-labelledby="news-main-title">
-          <header class="panel-head">
-            <h2 class="panel-title" id="news-main-title"></h2>
-            <p class="status" id="news-main-status" hidden></p>
-          </header>
-          <div class="panel-body" id="news-main-body"></div>
-        </section>
-        <section class="panel panel-news panel-news-side" aria-labelledby="news-side-title">
-          <header class="panel-head">
-            <h2 class="panel-title" id="news-side-title"></h2>
-            <p class="status" id="news-side-status" hidden></p>
-          </header>
-          <div class="panel-body" id="news-side-body"></div>
-        </section>
-      </div>
-      <div class="column column-side">
-        <section class="panel panel-weather" aria-labelledby="weather-title">
-          <header class="panel-head">
-            <h2 class="panel-title" id="weather-title"></h2>
-            <p class="status" id="weather-status" hidden></p>
-          </header>
-          <div class="panel-body" id="weather-body"></div>
-          <p class="source-note" id="weather-source"></p>
-        </section>
-      </div>
-    </main>
+    <main class="screen" id="screen"></main>
+    <aside class="overlay" id="overlay" hidden></aside>
   </body>
 </html>

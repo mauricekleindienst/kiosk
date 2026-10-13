@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const KIOSK_PORT = Number(process.env.KIOSK_E2E_PORT ?? 8199);
+const ADMIN_PORT = Number(process.env.KIOSK_E2E_ADMIN_PORT ?? 8198);
 const ROOT = new URL("../../", import.meta.url).pathname;
 
 const DAY_ICONS = ["partly-cloudy-day", "rain", "cloudy", "clear-day", "thunderstorm", "snow", "fog", "sleet"];
@@ -137,10 +138,15 @@ upstream.listen(0, "127.0.0.1", () => {
   const configPath = join(dir, "config.json");
   writeFileSync(configPath, JSON.stringify({
     port: KIOSK_PORT,
+    adminHost: "127.0.0.1",
+    adminPort: ADMIN_PORT,
     weather: { baseUrl: base },
     news: { main: { url: `${base}/rss/main` }, side: { url: `${base}/rss/side` } },
   }));
-  const kiosk = spawn("python3", ["-m", "kiosk", "--config", configPath, "--cache-dir", join(dir, "cache")], {
+  const kiosk = spawn("python3", [
+    "-m", "kiosk", "--config", configPath, "--cache-dir", join(dir, "cache"),
+    "--state-dir", join(dir, "state"), "--data-dir", join(dir, "data"),
+  ], {
     cwd: join(ROOT, "server"),
     stdio: "inherit",
     env: { ...process.env, NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost" },

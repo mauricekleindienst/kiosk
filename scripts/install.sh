@@ -87,4 +87,5 @@ if command -v raspi-config >/dev/null; then
 fi
 
 say "done. The screen opens after the next reboot (sudo reboot)."
-say "settings: $CONFIG (optional; see README.md). Logs: journalctl --user -u kiosk"
+say "admin interface: http://$(hostname).local:8081 from any device in the network;"
+say "  the first time, enter the code the screen shows. Logs: journalctl --user -u kiosk"

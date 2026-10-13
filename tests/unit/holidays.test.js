@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { easterSunday, hesseHolidays, nextHoliday } from "../../web/js/holidays.js";
+import { easterSunday, hesseHolidays, nextHoliday } from "../../web/shared/js/holidays.js";
 
 test("Easter Sunday", () => {
   assert.equal(easterSunday(2024), "2024-03-31");

@@ -4,7 +4,7 @@ import { test } from "node:test";
 import {
   daysBetween, formatAge, formatClock, formatLongDate, formatMillimetres, formatPercent, formatSpeed,
   formatTemperature, isoDay, isoWeek, weekdayShort, zonedParts,
-} from "../../web/js/format.js";
+} from "../../web/shared/js/format.js";
 
 const BERLIN = "Europe/Berlin";
 
