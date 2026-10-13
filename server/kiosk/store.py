@@ -3,10 +3,10 @@ the last known weather and news after a reboot without network instead of an emp
 
 import json
 import logging
-import os
-import tempfile
 import threading
 from pathlib import Path
+
+from .fsutil import atomic_write_json
 
 log = logging.getLogger("kiosk")
 
@@ -18,7 +18,11 @@ class Store:
         self._entries = {}
 
     def load(self, names):
+        """Reads the cached data of sources that are not in memory yet."""
         for name in names:
+            with self._lock:
+                if name in self._entries:
+                    continue
             path = self._dir / f"{name}.json"
             try:
                 with open(path, encoding="utf-8") as handle:
@@ -48,18 +52,7 @@ class Store:
             return {name: dict(entry) for name, entry in self._entries.items()}
 
     def _persist(self, name, entry):
-        # Temp file plus rename: a power cut mid-write leaves the previous cache intact.
         try:
-            self._dir.mkdir(parents=True, exist_ok=True)
-            fd, temp_path = tempfile.mkstemp(dir=self._dir, prefix=f".{name}.", suffix=".tmp")
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    json.dump({"data": entry["data"], "fetchedAt": entry["fetchedAt"]}, handle, ensure_ascii=False)
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(temp_path, self._dir / f"{name}.json")
-            except BaseException:
-                os.unlink(temp_path)
-                raise
+            atomic_write_json(self._dir / f"{name}.json", {"data": entry["data"], "fetchedAt": entry["fetchedAt"]})
         except OSError as err:
             log.warning("Could not write cache for %s to %s: %s", name, self._dir, err)

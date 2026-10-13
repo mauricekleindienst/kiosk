@@ -1,67 +1,105 @@
-"""The kiosk server: refreshes weather and news in the background and serves the screen."""
+"""The kiosk server: refreshes weather and news in the background, serves the screen locally and
+the admin interface to the local network."""
 
 import argparse
-import functools
-import json
+import hashlib
 import logging
 import os
 import threading
 import time
 from datetime import datetime, timezone
-from http import HTTPStatus
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import feeds, http_client, weather
+from . import __version__, feeds, http_client, weather
+from .auth import Auth
 from .config import ConfigError, load_config
+from .http_api import AdminHandler, ScreenHandler
+from .netinfo import lan_addresses
+from .settings import SettingsStore, default_settings, load_catalog
 from .store import Store
+from .uploads import Uploads
 
 log = logging.getLogger("kiosk")
 
-WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 # After a failed refresh, try again sooner than the regular interval, but do not hammer the source.
 RETRY_SECONDS = 60
-SCHEDULER_TICK_SECONDS = 5
-
-SECURITY_HEADERS = {
-    "Content-Security-Policy": (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-        "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
-    ),
-    "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
-    "Cache-Control": "no-cache",
-}
+SCHEDULER_TICK_SECONDS = 2
+# The server keeps more headlines than any widget shows; each widget applies its own limit.
+HEADLINES_KEPT = 12
 
 
 def _utc_now():
     return datetime.now(timezone.utc)
 
 
-class Kiosk:
-    """Owns the configuration, the data sources and their refresh schedule."""
+def _key(prefix, *parts):
+    return f"{prefix}-{hashlib.sha256('|'.join(map(str, parts)).encode()).hexdigest()[:12]}"
 
-    def __init__(self, config, store, fetch=http_client.fetch, fetch_json=http_client.fetch_json, clock=_utc_now):
+
+class Kiosk:
+    """Owns the configuration, the settings, the data sources and their refresh schedule."""
+
+    def __init__(self, config, store, settings, auth, uploads,
+                 fetch=http_client.fetch, fetch_json=http_client.fetch_json, clock=_utc_now, monotonic=time.monotonic):
         self.config = config
         self.store = store
+        self.settings = settings
+        self.auth = auth
+        self.uploads = uploads
         self._fetch = fetch
         self._fetch_json = fetch_json
         self._clock = clock
-        self._tz = ZoneInfo(config["timeZone"])
-        self.sources = {
-            "weather": (self._refresh_weather, config["weather"]["refreshMinutes"] * 60),
-            "news-main": (functools.partial(self._refresh_news, "main"), config["news"]["refreshMinutes"] * 60),
-            "news-side": (functools.partial(self._refresh_news, "side"), config["news"]["refreshMinutes"] * 60),
-        }
-        self._due = {name: 0.0 for name in self.sources}
+        self._monotonic = monotonic
+        self._lock = threading.Lock()
+        self._sources = {}
+        self._due = {}
+        self._data_version = 0
+        self._reload_token = 0
+        self._screen = None
+        self._started = clock()
+        self.admin_port = None
+        self._apply(settings.get()[0])
+        settings.on_change(self._apply)
 
-    def _refresh_weather(self, now):
-        location = self.config["location"]
-        urls = weather.request_urls(
-            self.config["weather"]["baseUrl"], location["lat"], location["lon"],
-            self.config["timeZone"], now.astimezone(self._tz).date(),
-        )
+    # Sources follow the settings: one for the weather at the location, one per distinct feed.
+
+    @staticmethod
+    def weather_key(settings):
+        location = settings["location"]
+        return _key("weather", location["lat"], location["lon"], settings["timeZone"])
+
+    @staticmethod
+    def news_key(url):
+        return _key("news", url)
+
+    def _apply(self, settings):
+        weather_minutes = self.config["weather"]["refreshMinutes"]
+        news_minutes = self.config["news"]["refreshMinutes"]
+        wanted = {self.weather_key(settings): ("weather", settings, weather_minutes * 60)}
+        for widget in settings["widgets"]:
+            if widget["type"] == "news":
+                url = widget["options"]["url"]
+                wanted[self.news_key(url)] = ("news", url, news_minutes * 60)
+        with self._lock:
+            self._sources = wanted
+            self._due = {key: self._due.get(key, 0.0) for key in wanted}
+        self.store.load([key for key in wanted])
+
+    def refresh_now(self):
+        with self._lock:
+            self._due = {key: 0.0 for key in self._due}
+
+    def reload_screen(self):
+        with self._lock:
+            self._reload_token += 1
+
+    def _refresh_weather(self, settings, now):
+        location = settings["location"]
+        tz = ZoneInfo(settings["timeZone"])
+        urls = weather.request_urls(self.config["weather"]["baseUrl"], location["lat"], location["lon"],
+                                    settings["timeZone"], now.astimezone(tz).date())
         current = self._fetch_json(urls["current"])
         forecast = self._fetch_json(urls["forecast"])
         try:
@@ -70,122 +108,155 @@ class Kiosk:
             # Warnings are an extra; a failing alerts endpoint must not hide the forecast.
             log.warning("Weather warnings unavailable, showing the forecast without them: %s", err)
             alerts = None
-        return weather.build_weather(
-            current, forecast, alerts, now, location["name"], location["lat"], location["lon"], self._tz,
-        )
+        return weather.build_weather(current, forecast, alerts, now, location["name"], location["lat"], location["lon"], tz)
 
-    def _refresh_news(self, key, now):
-        feed = self.config["news"][key]
-        headlines = feeds.parse_feed(self._fetch(feed["url"], accept="application/rss+xml, application/atom+xml, text/xml"))
-        picked = feeds.select_headlines(headlines, now, int(feed["limit"]), float(self.config["news"]["maxAgeDays"]))
+    def _refresh_news(self, url, now):
+        headlines = feeds.parse_feed(self._fetch(url, accept="application/rss+xml, application/atom+xml, text/xml"))
+        picked = feeds.select_headlines(headlines, now, HEADLINES_KEPT, float(self.config["news"]["maxAgeDays"]))
         return [headline.to_json() for headline in picked]
 
-    def run_due(self, monotonic_now):
+    def run_due(self, monotonic_now=None):
         """Refreshes every source whose time has come. Called by the scheduler thread and by tests."""
-        for name, (refresh, interval) in self.sources.items():
-            if monotonic_now < self._due[name]:
-                continue
+        monotonic_now = self._monotonic() if monotonic_now is None else monotonic_now
+        with self._lock:
+            due = [(key, spec) for key, spec in self._sources.items() if monotonic_now >= self._due.get(key, 0.0)]
+        for key, (kind, argument, interval) in due:
             now = self._clock()
+            next_due = monotonic_now + interval
             try:
-                data = refresh(now)
+                if kind == "weather":
+                    data = self._refresh_weather(argument, now)
+                else:
+                    data = self._refresh_news(argument, now)
             except (http_client.FetchError, feeds.FeedError) as err:
-                log.warning("Refreshing %s failed, keeping the last good data: %s", name, err)
-                self.store.fail(name, str(err))
-                self._due[name] = monotonic_now + min(RETRY_SECONDS, interval)
-                continue
+                log.warning("Refreshing %s failed, keeping the last good data: %s", key, err)
+                self.store.fail(key, str(err))
+                next_due = monotonic_now + min(RETRY_SECONDS, interval)
             except Exception as err:  # noqa: BLE001 - an unexpected answer must not stop the scheduler
-                log.exception("Refreshing %s failed on an unexpected answer, keeping the last good data", name)
-                self.store.fail(name, str(err))
-                self._due[name] = monotonic_now + min(RETRY_SECONDS, interval)
-                continue
-            self.store.put(name, data, now.isoformat())
-            self._due[name] = monotonic_now + interval
-            log.info("Refreshed %s", name)
+                log.exception("Refreshing %s failed on an unexpected answer, keeping the last good data", key)
+                self.store.fail(key, str(err))
+                next_due = monotonic_now + min(RETRY_SECONDS, interval)
+            else:
+                self.store.put(key, data, now.isoformat())
+                log.info("Refreshed %s", key)
+            with self._lock:
+                if key in self._due:
+                    self._due[key] = next_due
+                self._data_version += 1
 
-    def state(self):
-        """The JSON the screen polls: data, when it was fetched, and the last error per source."""
+    # What the screen and the admin interface read.
+
+    def record_screen(self, width, height):
+        try:
+            size = (max(0, min(int(width), 20000)), max(0, min(int(height), 20000)))
+        except ValueError:
+            return
+        with self._lock:
+            self._screen = {"width": size[0], "height": size[1], "lastSeen": self._clock().isoformat()}
+
+    def revision(self):
+        with self._lock:
+            revision = {"settings": self.settings.revision, "data": self._data_version, "reload": self._reload_token}
+        # The setup notice must vanish from the screen as soon as a password exists.
+        return {**revision, "setup": self.auth.setup_required}
+
+    def state(self, include_setup=False):
+        settings, revision = self.settings.get()
         entries = self.store.snapshot()
+        news_minutes = self.config["news"]["refreshMinutes"]
 
-        def source(name, extra):
-            entry = entries.get(name) or {}
-            return {"data": entry.get("data"), "fetchedAt": entry.get("fetchedAt"), "error": entry.get("error"), **extra}
+        def source(key, minutes):
+            entry = entries.get(key) or {}
+            return {"data": entry.get("data"), "fetchedAt": entry.get("fetchedAt"), "error": entry.get("error"),
+                    "refreshMinutes": minutes}
 
-        news = self.config["news"]
-        return {
+        state = {
             "serverTime": self._clock().isoformat(),
-            "timeZone": self.config["timeZone"],
-            "display": {"reloadAt": self.config["display"]["reloadAt"]},
-            "weather": source("weather", {"refreshMinutes": self.config["weather"]["refreshMinutes"]}),
+            "revision": self.revision(),
+            "settings": settings,
+            "weather": source(self.weather_key(settings), self.config["weather"]["refreshMinutes"]),
             "news": {
-                key: source(f"news-{key}", {"title": news[key]["title"], "refreshMinutes": news["refreshMinutes"]})
-                for key in ("main", "side")
+                widget["id"]: source(self.news_key(widget["options"]["url"]), news_minutes)
+                for widget in settings["widgets"] if widget["type"] == "news"
             },
+            "setup": None,
+        }
+        code = self.auth.setup_code if include_setup else None
+        if code and self.admin_port:
+            state["setup"] = {"code": code, "urls": [f"http://{address}:{self.admin_port}" for address in lan_addresses()]}
+        return state
+
+    def upload_usage(self):
+        """Upload id -> names of the places that use it."""
+        settings, _ = self.settings.get()
+        catalog = self.settings.catalog
+        usage = {}
+        if settings["logo"]:
+            usage.setdefault(settings["logo"], []).append("Firmenlogo")
+        for widget in settings["widgets"]:
+            label = catalog["types"][widget["type"]]["label"]
+            options = widget["options"]
+            for value in [options.get("image")] + list(options.get("images") or []):
+                if value:
+                    usage.setdefault(value, []).append(f"Kachel „{label}“")
+        return usage
+
+    def uploads_with_usage(self):
+        usage = self.upload_usage()
+        return [{**item, "usedBy": usage.get(item["id"], [])} for item in self.uploads.list()]
+
+    def status(self):
+        settings, _ = self.settings.get()
+        entries = self.store.snapshot()
+        sources = [{"label": f"Wetter für {settings['location']['name']}", **self._entry(entries, self.weather_key(settings))}]
+        seen = set()
+        for widget in settings["widgets"]:
+            if widget["type"] == "news" and widget["options"]["url"] not in seen:
+                seen.add(widget["options"]["url"])
+                sources.append({"label": f"Nachrichten „{widget['options']['title']}“",
+                                **self._entry(entries, self.news_key(widget["options"]["url"]))})
+        with self._lock:
+            screen = dict(self._screen) if self._screen else None
+        return {
+            "version": __version__,
+            "startedAt": self._started.isoformat(),
+            "serverTime": self._clock().isoformat(),
+            "addresses": [f"http://{address}:{self.admin_port}" for address in lan_addresses()] if self.admin_port else [],
+            "screen": screen,
+            "sources": sources,
         }
 
-
-class Handler(SimpleHTTPRequestHandler):
-    extensions_map = {
-        **SimpleHTTPRequestHandler.extensions_map,
-        ".js": "text/javascript",
-        ".css": "text/css",
-        ".svg": "image/svg+xml",
-        ".woff2": "font/woff2",
-        ".json": "application/json",
-    }
-
-    def __init__(self, *args, kiosk, **kwargs):
-        self.kiosk = kiosk
-        super().__init__(*args, directory=str(WEB_DIR), **kwargs)
-
-    def end_headers(self):
-        for name, value in SECURITY_HEADERS.items():
-            self.send_header(name, value)
-        super().end_headers()
-
-    def do_GET(self):
-        path = self.path.split("?", 1)[0]
-        if path == "/api/state":
-            self._send_json(self.kiosk.state())
-        elif path == "/api/health":
-            self._send_json({"ok": True})
-        elif path.startswith("/api/"):
-            self.send_error(HTTPStatus.NOT_FOUND)
-        else:
-            super().do_GET()
-
-    def list_directory(self, path):
-        self.send_error(HTTPStatus.NOT_FOUND)
-        return None
-
-    def _send_json(self, payload):
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, format, *args):
-        log.debug("%s %s", self.address_string(), format % args)
+    @staticmethod
+    def _entry(entries, key):
+        entry = entries.get(key) or {}
+        return {"fetchedAt": entry.get("fetchedAt"), "error": entry.get("error")}
 
 
-def make_server(kiosk, host, port):
-    return ThreadingHTTPServer((host, port), functools.partial(Handler, kiosk=kiosk))
+def make_server(kiosk, host, port, handler):
+    server = ThreadingHTTPServer((host, port), handler)
+    server.daemon_threads = True
+    server.kiosk = kiosk
+    return server
 
 
 def _scheduler(kiosk, stop):
     while not stop.is_set():
-        kiosk.run_due(time.monotonic())
+        kiosk.run_due()
         stop.wait(SCHEDULER_TICK_SECONDS)
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Serves the office kiosk screen.")
-    default_config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "kiosk" / "config.json"
-    default_cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "kiosk"
-    parser.add_argument("--config", default=str(default_config), help="owner configuration (JSON); optional")
-    parser.add_argument("--cache-dir", default=str(default_cache), help="where the last good data is kept")
-    parser.add_argument("--port", type=int, help="overrides the port from the configuration")
+    parser = argparse.ArgumentParser(description="Serves the office kiosk screen and its admin interface.")
+    home = Path.home()
+    config_dir = Path(os.environ.get("XDG_CONFIG_HOME", home / ".config")) / "kiosk"
+    cache_dir = Path(os.environ.get("XDG_CACHE_HOME", home / ".cache")) / "kiosk"
+    data_dir = Path(os.environ.get("XDG_DATA_HOME", home / ".local" / "share")) / "kiosk"
+    parser.add_argument("--config", default=str(config_dir / "config.json"), help="owner configuration (JSON); optional")
+    parser.add_argument("--state-dir", default=str(config_dir), help="where settings and the admin password are kept")
+    parser.add_argument("--data-dir", default=str(data_dir), help="where uploaded images are kept")
+    parser.add_argument("--cache-dir", default=str(cache_dir), help="where the last good data is kept")
+    parser.add_argument("--port", type=int, help="overrides the screen port from the configuration")
+    parser.add_argument("--admin-port", type=int, help="overrides the admin port from the configuration")
     parser.add_argument("--verbose", action="store_true", help="log every request")
     args = parser.parse_args(argv)
 
@@ -196,24 +267,38 @@ def main(argv=None):
         log.error("Cannot start: %s", err)
         return 2
 
-    store = Store(args.cache_dir)
-    kiosk = Kiosk(config, store)
-    store.load(kiosk.sources)
+    state_dir = Path(args.state_dir)
+    catalog = load_catalog()
+    settings = SettingsStore(state_dir / "settings.json", catalog, default_settings(config, catalog))
+    kiosk = Kiosk(config, Store(args.cache_dir), settings, Auth(state_dir / "admin.json"), Uploads(Path(args.data_dir) / "uploads"))
+
+    servers = []
     port = args.port if args.port is not None else int(config["port"])
+    admin_port = args.admin_port if args.admin_port is not None else config.get("adminPort")
     try:
-        server = make_server(kiosk, config["host"], port)
+        servers.append(make_server(kiosk, config["host"], port, ScreenHandler))
+        if admin_port:
+            servers.append(make_server(kiosk, config["adminHost"], int(admin_port), AdminHandler))
+            kiosk.admin_port = servers[-1].server_address[1]
     except OSError as err:
-        log.error("Cannot listen on %s:%s: %s", config["host"], port, err)
+        log.error("Cannot listen: %s", err)
         return 2
 
     stop = threading.Event()
     threading.Thread(target=_scheduler, args=(kiosk, stop), name="scheduler", daemon=True).start()
-    log.info("Serving the kiosk on http://%s:%s", config["host"], server.server_address[1])
+    for server in servers[1:]:
+        threading.Thread(target=server.serve_forever, name="admin", daemon=True).start()
+    log.info("Serving the screen on http://%s:%s", config["host"], servers[0].server_address[1])
+    if kiosk.admin_port:
+        log.info("Admin interface on port %s: %s", kiosk.admin_port, ", ".join(kiosk.status()["addresses"]) or "no network")
     try:
-        server.serve_forever()
+        servers[0].serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         stop.set()
-        server.server_close()
+        for server in servers[1:]:
+            server.shutdown()
+        for server in servers:
+            server.server_close()
     return 0

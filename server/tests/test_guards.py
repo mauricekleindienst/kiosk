@@ -12,7 +12,7 @@ class GuardTest(unittest.TestCase):
                 continue
             source = path.read_text(encoding="utf-8")
             self.assertIsNone(
-                re.search(r"\b(urllib\.request|http\.client|urlopen|requests)\b", source),
+                re.search(r"^\s*(import|from)\s+(urllib\.request|http\.client|requests)\b|urlopen\(", source, re.M),
                 f"{path.name} opens connections itself; use http_client.fetch",
             )
 

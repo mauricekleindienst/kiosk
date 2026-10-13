@@ -44,6 +44,9 @@ def _validate(config):
             raise ConfigError(f"news.{key}.limit must be at least 1")
     if float(config["weather"]["refreshMinutes"]) < 1 or float(config["news"]["refreshMinutes"]) < 1:
         raise ConfigError("refreshMinutes must be at least 1")
+    admin_port = config.get("adminPort")
+    if admin_port is not None and not (isinstance(admin_port, int) and 0 <= admin_port <= 65535):
+        raise ConfigError("adminPort must be a port number, or null to switch the admin interface off")
     hours, _, minutes = str(config["display"]["reloadAt"]).partition(":")
     if not (hours.isdigit() and minutes.isdigit() and int(hours) < 24 and int(minutes) < 60):
         raise ConfigError('display.reloadAt must look like "03:30"')

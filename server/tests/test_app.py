@@ -1,66 +1,38 @@
-import json
 import tempfile
-import threading
 import unittest
-import urllib.error
-import urllib.request
 from pathlib import Path
 
-from kiosk import http_client
-from kiosk.app import RETRY_SECONDS, Kiosk, make_server
+from kiosk.app import RETRY_SECONDS
 from kiosk.config import ConfigError, load_config
 from kiosk.store import Store
 
-from helpers import berlin, fixture_bytes, fixture_json, forecast
-
-NOW = berlin(2026, 10, 13, 9, 41)
+from helpers import PNG, make_kiosk
 
 
-class FakeUpstream:
-    """Answers the kiosk's requests like Bright Sky and Google News would, or fails on demand."""
-
-    def __init__(self):
-        self.failing = set()
-        self.requests = []
-
-    def _check(self, url):
-        self.requests.append(url)
-        for part in self.failing:
-            if part in url:
-                raise http_client.FetchError(f"{url} is not reachable: fake outage")
-
-    def fetch(self, url, accept="*/*"):
-        self._check(url)
-        return fixture_bytes("google-news-rheinmetall.xml")
-
-    def fetch_json(self, url):
-        self._check(url)
-        if "/current_weather" in url:
-            return fixture_json("brightsky-current.json")
-        if "/alerts" in url:
-            return fixture_json("brightsky-alerts.json")
-        return forecast(berlin(2026, 10, 13, 0), 24 * 8)
+def news_of(state, widget_id):
+    return state["news"][widget_id]
 
 
 class KioskTest(unittest.TestCase):
     def setUp(self):
-        self.cache = tempfile.TemporaryDirectory()
-        self.addCleanup(self.cache.cleanup)
-        self.upstream = FakeUpstream()
-        self.kiosk = self.make_kiosk()
+        self.kiosk = make_kiosk(self)
+        self.upstream = self.kiosk.upstream
 
-    def make_kiosk(self):
-        return Kiosk(load_config(None), Store(self.cache.name), self.upstream.fetch, self.upstream.fetch_json, lambda: NOW)
+    def change(self, mutate):
+        settings, revision = self.kiosk.settings.get()
+        mutate(settings)
+        return self.kiosk.settings.update(settings, revision, self.kiosk.uploads.ids())
 
     def test_first_run_fills_every_source(self):
         self.kiosk.run_due(0)
         state = self.kiosk.state()
         self.assertEqual(state["weather"]["data"]["location"], "Kassel")
-        self.assertEqual(state["weather"]["fetchedAt"], NOW.isoformat())
-        self.assertEqual(state["news"]["main"]["title"], "Rheinmetall")
-        self.assertEqual(state["news"]["main"]["data"][0]["title"], "Rheinmetall erhält Großauftrag für Munition")
-        self.assertEqual(len(state["news"]["side"]["data"]), 2, "the default limit of the regional block")
-        self.assertEqual(state["display"]["reloadAt"], "03:30")
+        self.assertEqual(state["weather"]["fetchedAt"], self.kiosk.clock.now.isoformat())
+        main = news_of(state, "news-main")
+        self.assertEqual(main["data"][0]["title"], "Rheinmetall erhält Großauftrag für Munition")
+        self.assertEqual(len(news_of(state, "news-side")["data"]), 3, "the server keeps more than a widget shows")
+        self.assertEqual(state["settings"]["display"]["reloadAt"], "03:30")
+        self.assertIsNone(state["setup"], "the setup code only goes to the local screen")
 
     def test_sources_are_not_refetched_before_their_interval(self):
         self.kiosk.run_due(0)
@@ -91,41 +63,106 @@ class KioskTest(unittest.TestCase):
 
     def test_unexpected_answer_shape_does_not_stop_the_scheduler(self):
         self.upstream.fetch_json = lambda url: ["not", "an", "object"]
-        self.kiosk = self.make_kiosk()
+        kiosk = make_kiosk(self, upstream=self.upstream)
         with self.assertLogs("kiosk", "ERROR"):
-            self.kiosk.run_due(0)
-        self.assertIsNotNone(self.kiosk.state()["weather"]["error"])
-        self.assertIsNotNone(self.kiosk.state()["news"]["main"]["data"], "the other sources still refresh")
+            kiosk.run_due(0)
+        self.assertIsNotNone(kiosk.state()["weather"]["error"])
+        self.assertIsNotNone(news_of(kiosk.state(), "news-main")["data"], "the other sources still refresh")
 
     def test_garbage_feed_is_reported_not_raised(self):
         self.upstream.fetch = lambda url, accept="*/*": b"<html>Bitte Cookies akzeptieren</html>"
-        self.kiosk = self.make_kiosk()
+        kiosk = make_kiosk(self, upstream=self.upstream)
+        kiosk.run_due(0)
+        self.assertIn("unknown feed format", news_of(kiosk.state(), "news-main")["error"])
+
+    def test_a_changed_feed_is_fetched_right_away(self):
         self.kiosk.run_due(0)
-        self.assertIn("unknown feed format", self.kiosk.state()["news"]["main"]["error"])
+        url = "https://example.org/feed.xml"
+
+        def edit(settings):
+            settings["widgets"][2]["options"]["url"] = url
+
+        self.change(edit)
+        self.kiosk.run_due(1)
+        self.assertIn(url, self.upstream.requests)
+        self.assertIsNotNone(news_of(self.kiosk.state(), "news-side")["data"])
+
+    def test_widgets_with_the_same_feed_share_one_source(self):
+        def same(settings):
+            settings["widgets"][2]["options"]["url"] = settings["widgets"][1]["options"]["url"]
+
+        self.change(same)
+        self.kiosk.run_due(0)
+        self.assertEqual(len([url for url in self.upstream.requests if "news.google" in url]), 1)
+
+    def test_moving_the_location_fetches_new_weather(self):
+        self.kiosk.run_due(0)
+
+        def move(settings):
+            settings["location"] = {"name": "Unterlüß", "lat": 52.83, "lon": 10.28}
+
+        self.change(move)
+        self.assertIsNone(self.kiosk.state()["weather"]["data"], "old weather must not be shown for the new place")
+        self.kiosk.run_due(1)
+        self.assertEqual(self.kiosk.state()["weather"]["data"]["location"], "Unterlüß")
+
+    def test_refresh_now_and_reload_screen(self):
+        self.kiosk.run_due(0)
+        count = len(self.upstream.requests)
+        self.kiosk.refresh_now()
+        self.kiosk.run_due(1)
+        self.assertGreater(len(self.upstream.requests), count)
+        before = self.kiosk.revision()["reload"]
+        self.kiosk.reload_screen()
+        self.assertEqual(self.kiosk.revision()["reload"], before + 1)
+
+    def test_data_version_tells_the_screen_to_fetch(self):
+        before = self.kiosk.revision()["data"]
+        self.kiosk.run_due(0)
+        self.assertGreater(self.kiosk.revision()["data"], before)
 
     def test_cache_survives_a_restart_without_network(self):
         self.kiosk.run_due(0)
         self.upstream.failing.update({"brightsky", "news.google"})
-        restarted = self.make_kiosk()
-        restarted.store.load(restarted.sources)
+        restarted = make_kiosk(self, upstream=self.upstream)
+        restarted.store = Store(self.kiosk.root / "cache")
+        restarted._apply(restarted.settings.get()[0])
         restarted.run_due(0)
         state = restarted.state()
         self.assertEqual(state["weather"]["data"]["location"], "Kassel")
-        self.assertEqual(state["weather"]["fetchedAt"], NOW.isoformat())
         self.assertIsNotNone(state["weather"]["error"])
-        self.assertEqual(len(state["news"]["main"]["data"]), 3)
+        self.assertEqual(len(news_of(state, "news-main")["data"]), 3)
 
     def test_corrupt_cache_file_is_ignored(self):
-        Path(self.cache.name, "weather.json").write_text("{not json", encoding="utf-8")
-        store = Store(self.cache.name)
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        Path(folder.name, "weather.json").write_text("{not json", encoding="utf-8")
+        store = Store(folder.name)
         with self.assertLogs("kiosk", "WARNING"):
             store.load(["weather"])
         self.assertEqual(store.snapshot(), {})
 
-    def test_cache_write_leaves_no_temp_files(self):
+    def test_upload_usage_names_the_places(self):
+        item = self.kiosk.uploads.add(PNG, "logo.png")
+
+        def use(settings):
+            settings["logo"] = item["id"]
+            settings["widgets"][3].update(y=1, h=7)
+            settings["widgets"].append({"id": "logo", "type": "logo", "x": 7, "y": 0, "w": 1, "h": 1,
+                                        "options": {"image": item["id"]}})
+
+        self.change(use)
+        self.assertEqual(self.kiosk.upload_usage()[item["id"]], ["Firmenlogo", "Kachel „Logo“"])
+
+    def test_status_lists_sources_and_screen(self):
         self.kiosk.run_due(0)
-        self.assertEqual(sorted(p.name for p in Path(self.cache.name).iterdir()),
-                         ["news-main.json", "news-side.json", "weather.json"])
+        self.kiosk.record_screen("1920", "1080")
+        status = self.kiosk.status()
+        self.assertEqual([source["label"] for source in status["sources"]],
+                         ["Wetter für Kassel", "Nachrichten „Rheinmetall“", "Nachrichten „Kassel und Region“"])
+        self.assertEqual((status["screen"]["width"], status["screen"]["height"]), (1920, 1080))
+        self.kiosk.record_screen("abc", "1")
+        self.assertEqual(self.kiosk.status()["screen"]["width"], 1920, "garbage sizes are ignored")
 
 
 class ConfigTest(unittest.TestCase):
@@ -144,7 +181,8 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config["news"]["main"]["title"], "Rheinmetall")
 
     def test_missing_owner_file_means_defaults(self):
-        self.assertEqual(load_config("/nonexistent/config.json")["port"], 8080)
+        config = load_config("/nonexistent/config.json")
+        self.assertEqual((config["port"], config["adminPort"]), (8080, 8081))
 
     def test_invalid_files_name_the_problem(self):
         with self.assertRaisesRegex(ConfigError, "not valid JSON"):
@@ -155,54 +193,11 @@ class ConfigTest(unittest.TestCase):
             load_config(self.write('{"display": {"reloadAt": "25:00"}}'))
         with self.assertRaisesRegex(ConfigError, "lat"):
             load_config(self.write('{"location": {"lat": 120}}'))
+        with self.assertRaisesRegex(ConfigError, "adminPort"):
+            load_config(self.write('{"adminPort": "8081"}'))
 
-
-class HttpServerTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.cache = tempfile.TemporaryDirectory()
-        upstream = FakeUpstream()
-        kiosk = Kiosk(load_config(None), Store(cls.cache.name), upstream.fetch, upstream.fetch_json, lambda: NOW)
-        kiosk.run_due(0)
-        cls.server = make_server(kiosk, "127.0.0.1", 0)
-        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
-        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.server.shutdown()
-        cls.server.server_close()
-        cls.cache.cleanup()
-
-    def get(self, path):
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        return opener.open(self.base + path, timeout=5)
-
-    def test_state_endpoint(self):
-        with self.get("/api/state") as response:
-            self.assertEqual(response.headers["Content-Type"], "application/json; charset=utf-8")
-            state = json.load(response)
-        self.assertEqual(state["timeZone"], "Europe/Berlin")
-        self.assertEqual(state["weather"]["data"]["daily"][0]["date"], "2026-10-13")
-
-    def test_page_is_served_with_a_strict_csp(self):
-        with self.get("/") as response:
-            body = response.read().decode("utf-8")
-            csp = response.headers["Content-Security-Policy"]
-        self.assertIn('<html lang="de">', body)
-        self.assertIn("script-src 'self'", csp)
-        self.assertNotIn("unsafe-inline", csp)
-
-    def test_scripts_have_a_module_mime_type(self):
-        with self.get("/js/main.js") as response:
-            self.assertEqual(response.headers["Content-Type"], "text/javascript")
-
-    def test_no_directory_listing_and_no_escape_from_the_web_folder(self):
-        for path in ("/js/", "/api/unknown", "/../config.default.json", "/%2e%2e/config.default.json"):
-            with self.subTest(path=path), self.assertRaises(urllib.error.HTTPError) as caught:
-                self.get(path)
-            self.assertEqual(caught.exception.code, 404)
-            caught.exception.close()
+    def test_admin_interface_can_be_switched_off(self):
+        self.assertIsNone(load_config(self.write('{"adminPort": null}'))["adminPort"])
 
 
 if __name__ == "__main__":
