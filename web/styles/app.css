@@ -1,0 +1,601 @@
+/* Layout and components of the screen. Sizes are in rem and the root size follows the viewport,
+   so the same layout fills a 720p, 1080p or 4K monitor without scrolling. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* 1rem = 1 % of the width, or of 16:9 of the height when the screen is wider than 16:9. */
+  font-size: min(1vw, 1.7778vh);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-page);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  font-feature-settings: "cv11", "ss03";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Nobody points at a wall screen; a resting mouse cursor would sit on it all day. */
+  cursor: none;
+}
+
+p,
+h2,
+ol,
+ul {
+  margin: 0;
+}
+
+ol,
+ul {
+  padding: 0;
+  list-style: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.screen {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--gap-screen);
+  height: 100vh;
+  padding: var(--gap-screen);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-screen);
+  min-height: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--pad-panel) calc(var(--pad-panel) * 1.15);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.panel-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.panel-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.placeholder {
+  color: var(--text-subtle);
+  font-size: 1.15rem;
+}
+
+.status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.status[hidden] {
+  display: none;
+}
+
+.status-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--warning);
+}
+
+/* Icons: shapes are drawn by icons.js and colored here. */
+
+.icon {
+  flex: none;
+  overflow: visible;
+}
+
+.icon .i-line,
+.icon .i-sun,
+.icon .i-moon {
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon .i-line {
+  fill: none;
+}
+
+.icon .i-muted {
+  stroke: var(--text-subtle);
+}
+
+.icon .i-sun {
+  fill: var(--icon-sun);
+}
+
+.icon .i-moon {
+  fill: var(--icon-moon);
+}
+
+.icon .i-cloud-line {
+  fill: currentColor;
+}
+
+.icon .i-cloud-line.i-muted {
+  fill: var(--text-subtle);
+}
+
+.icon .i-cloud {
+  fill: var(--surface);
+}
+
+.icon .i-rain {
+  stroke: var(--icon-rain);
+  stroke-width: 1.75;
+}
+
+.icon .i-bolt {
+  stroke: var(--icon-bolt);
+  stroke-width: 1.75;
+}
+
+.icon .i-snow {
+  fill: var(--icon-snow);
+}
+
+.icon .i-hail {
+  fill: var(--icon-hail);
+}
+
+/* Time */
+
+.panel-time {
+  flex: none;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 2.25rem;
+}
+
+.clock {
+  font-size: 8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.date-block {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.date {
+  font-size: 1.95rem;
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.015em;
+}
+
+.date-meta {
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+
+/* News */
+
+.panel-news {
+  flex: 1 1 0;
+}
+
+.headlines {
+  display: flex;
+  flex-direction: column;
+}
+
+.headline {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.headline:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.headline-title {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 1.45rem;
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.01em;
+  line-height: 1.28;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+
+.headline-lead {
+  padding-bottom: 1.3rem;
+}
+
+.headline-lead .headline-title {
+  font-size: 2.1rem;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.025em;
+  line-height: 1.16;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.headline-meta {
+  margin-top: 0.4rem;
+  overflow: hidden;
+  color: var(--text-subtle);
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headline-lead .headline-meta {
+  font-size: 1.1rem;
+}
+
+/* Regional news: a compact two-column block below the main news. */
+.panel-news-side {
+  flex: none;
+}
+
+.panel-news-side .headlines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 2rem;
+}
+
+.panel-news-side .headline {
+  padding: 0.8rem 0;
+}
+
+.panel-news-side .headline:nth-child(-n + 2) {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.panel-news-side .headline-title {
+  font-size: 1.2rem;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.panel-news-side .headline-meta {
+  font-size: 0.95rem;
+}
+
+/* Weather */
+
+.panel-weather {
+  flex: 1 1 0;
+}
+
+.panel-weather .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.source-note {
+  margin-top: 1rem;
+  color: var(--text-subtle);
+  font-size: 0.8rem;
+}
+
+.alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--warning-soft);
+  border-radius: var(--radius-tile);
+}
+
+.alert-severe,
+.alert-extreme {
+  background: var(--danger-soft);
+}
+
+.alert-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  color: var(--warning);
+}
+
+.alert-severe .alert-icon,
+.alert-extreme .alert-icon {
+  color: var(--danger);
+}
+
+.alert-text {
+  min-width: 0;
+}
+
+.alert-label {
+  color: var(--warning);
+  font-size: 0.85rem;
+  font-weight: var(--weight-semibold);
+}
+
+.alert-severe .alert-label,
+.alert-extreme .alert-label {
+  color: var(--danger);
+}
+
+.alert-headline {
+  overflow: hidden;
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.now-icon {
+  width: 6.5rem;
+  height: 6.5rem;
+}
+
+.now-text {
+  min-width: 0;
+}
+
+.now-temperature {
+  font-size: 5.25rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.now-condition {
+  margin-top: 0.3rem;
+  font-size: 1.45rem;
+  font-weight: var(--weight-medium);
+}
+
+.now-range {
+  margin-top: 0.2rem;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.fact {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.fact-icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  color: var(--text-muted);
+}
+
+.fact-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fact-label {
+  overflow: hidden;
+  color: var(--text-subtle);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fact-value {
+  overflow: hidden;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hours {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  padding: 0.85rem 0.4rem;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-tile);
+}
+
+.hour {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.hour-time {
+  color: var(--text-subtle);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.hour-icon {
+  width: 1.85rem;
+  height: 1.85rem;
+}
+
+.hour-temperature {
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+}
+
+.hour-precipitation,
+.day-precipitation {
+  min-height: 1.1em;
+  color: var(--icon-rain);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-medium);
+}
+
+.days {
+  display: flex;
+  flex-direction: column;
+}
+
+.day {
+  display: grid;
+  grid-template-columns: 3.2rem 2rem 3rem 2.6rem minmax(0, 1fr) 2.6rem;
+  align-items: center;
+  column-gap: 0.8rem;
+  padding: 0.32rem 0;
+  border-top: 1px solid var(--border);
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.day:first-child {
+  border-top: 0;
+}
+
+.day-name {
+  font-weight: var(--weight-medium);
+}
+
+.day-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.day-min {
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.day-max {
+  font-weight: var(--weight-semibold);
+}
+
+.day-bar {
+  position: relative;
+  height: 0.4rem;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+}
+
+.day-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--from) * 100%);
+  right: calc((1 - var(--to)) * 100%);
+  min-width: 0.4rem;
+  background: linear-gradient(90deg, var(--temp-cold), var(--temp-warm));
+  border-radius: var(--radius-pill);
+}
+
+/* Portrait monitors: one column; time, weather, main news, regional news. */
+@media (orientation: portrait) {
+  html {
+    font-size: min(1.6vw, 0.9vh);
+  }
+
+  .screen {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .column {
+    display: contents;
+  }
+
+  .panel-time {
+    order: 1;
+  }
+
+  .panel-weather {
+    flex: none;
+    order: 2;
+  }
+
+  .panel-news-main {
+    order: 3;
+  }
+
+  .panel-news-side {
+    order: 4;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
