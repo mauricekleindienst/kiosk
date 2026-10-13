@@ -29,6 +29,12 @@ jobs:
         run: npm run test:server
       - name: Raspberry Pi script tests
         run: npm run test:scripts
+      - name: Installer logic
+        run: python3 -m unittest discover -s installer/tests -p 'test_core.py'
+      - name: Installer window (system Python with Tk, virtual display)
+        run: |
+          sudo apt-get install -y python3-tk xvfb
+          xvfb-run -a /usr/bin/python3 -m unittest discover -s installer/tests -p 'test_app.py'
       - name: Unit and guard tests
         run: npm run test:unit
       - name: End-to-end tests

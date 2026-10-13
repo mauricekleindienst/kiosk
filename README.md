@@ -16,6 +16,21 @@ kein pip, keine API-Schlüssel.
 
 ## Einrichten auf dem Raspberry Pi
 
+### Mit dem Einrichtungsfenster
+
+1. Auf dem Pi im Browser bei GitHub anmelden, das Repository öffnen, „Code“ → „Download ZIP“, und
+   die ZIP-Datei im Dateimanager entpacken (am besten nach `~/kiosk`). Oder mit Git:
+   `git clone https://github.com/mauricekleindienst/kiosk.git ~/kiosk`.
+2. Im Ordner doppelt auf **„Kiosk einrichten“** klicken (beim Nachfragen „Ausführen“ wählen).
+3. Das Fenster prüft das System, fragt nach der Verwaltung im Netz und HDMI-CEC, richtet den
+   Zugang für automatische Updates ein (Deploy Key erzeugen, auf GitHub eintragen, prüfen) und
+   installiert alles. Es zeigt am Ende die Adresse der Verwaltung und bietet den Neustart an.
+
+Danach steht „Kiosk einrichten“ auch im Startmenü unter „Einstellungen“, zum Reparieren oder
+Entfernen.
+
+### Im Terminal
+
 Voraussetzung: Raspberry Pi OS **Bookworm oder neuer** mit Desktop, automatische Anmeldung des
 Desktop-Benutzers (Standard bei der Einrichtung; sonst `sudo raspi-config` → System Options →
 Boot / Auto Login → Desktop Autologin) und Netzwerk.

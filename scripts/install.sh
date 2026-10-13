@@ -12,6 +12,8 @@ UNIT_DIR="$CONFIG_HOME/systemd/user"
 AUTOSTART_DIR="$CONFIG_HOME/autostart"
 
 say() { printf 'kiosk: %s\n' "$*"; }
+# The graphical installer passes "sudo -A" with an askpass helper; on the terminal it is plain sudo.
+read -r -a SUDO <<<"${KIOSK_SUDO:-sudo}"
 fail() { printf 'kiosk: %s\n' "$*" >&2; exit 1; }
 
 [ "$(id -u)" -ne 0 ] || fail "run this as the desktop user (e.g. pi), not as root; it asks for sudo where needed."
@@ -21,10 +23,10 @@ python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' \
 
 if ! command -v chromium >/dev/null && ! command -v chromium-browser >/dev/null; then
   say "installing Chromium…"
-  sudo apt-get update
-  sudo apt-get install -y chromium
+  "${SUDO[@]}" apt-get update
+  "${SUDO[@]}" apt-get install -y chromium
 fi
-command -v curl >/dev/null || { say "installing curl…"; sudo apt-get install -y curl; }
+command -v curl >/dev/null || { say "installing curl…"; "${SUDO[@]}" apt-get install -y curl; }
 
 # Fail now, with the reason, rather than in a service log after the next reboot.
 (cd "$ROOT/server" && python3 -c 'import sys; from kiosk.config import load_config; load_config(sys.argv[1])' "$CONFIG") \
@@ -49,7 +51,7 @@ systemctl --user daemon-reload
 systemctl --user enable kiosk.service
 systemctl --user restart kiosk.service
 # Start the user services at boot, before anybody logs in.
-sudo loginctl enable-linger "$USER"
+"${SUDO[@]}" loginctl enable-linger "$USER"
 
 say "opening the screen in Chromium on every login…"
 mkdir -p "$AUTOSTART_DIR"
@@ -81,9 +83,28 @@ if [ -f "$WAYFIRE" ] && ! grep -qF "$LAUNCHER" "$WAYFIRE"; then
   fi
 fi
 
+if [ -n "${KIOSK_CEC:-}" ] && ! command -v cec-ctl >/dev/null; then
+  say "installing HDMI-CEC tools…"
+  "${SUDO[@]}" apt-get install -y v4l-utils
+fi
+
+say "adding the setup to the application menu…"
+APPS="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+mkdir -p "$APPS"
+cat > "$APPS/kiosk-setup.desktop" <<SETUP
+[Desktop Entry]
+Type=Application
+Name=Kiosk einrichten
+Comment=Den Büro-Bildschirm einrichten, reparieren oder entfernen
+Exec=python3 $ROOT/installer/app.py
+Icon=preferences-desktop-display
+Categories=Settings;
+Terminal=false
+SETUP
+
 if command -v raspi-config >/dev/null; then
   say "switching off screen blanking…"
-  sudo raspi-config nonint do_blanking 1
+  "${SUDO[@]}" raspi-config nonint do_blanking 1
 fi
 
 say "done. The screen opens after the next reboot (sudo reboot)."

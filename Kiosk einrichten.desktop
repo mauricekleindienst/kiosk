@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Kiosk einrichten
+Comment=Den Büro-Bildschirm einrichten, reparieren oder entfernen
+Exec=sh -c 'python3 "$(dirname "$1")/installer/app.py"' kiosk-setup %k
+Icon=preferences-desktop-display
+Terminal=false

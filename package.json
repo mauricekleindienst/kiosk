@@ -4,12 +4,13 @@
   "type": "module",
   "description": "Office wall screen for a Raspberry Pi: clock, weather and news.",
   "scripts": {
-    "test": "npm run test:server && npm run test:scripts && npm run test:unit && npm run test:e2e",
+    "test": "npm run test:server && npm run test:scripts && npm run test:installer && npm run test:unit && npm run test:e2e",
     "test:server": "cd server && python3 -m unittest discover -s tests",
     "test:scripts": "python3 -m unittest discover -s tests/scripts",
     "test:unit": "node --test \"tests/unit/*.test.js\" \"tests/guards/*.test.js\"",
     "test:e2e": "playwright test",
-    "lint:shell": "shellcheck scripts/*.sh"
+    "lint:shell": "shellcheck scripts/*.sh",
+    "test:installer": "python3 -m unittest discover -s installer/tests -p 'test_core.py' && xvfb-run -a python3 -m unittest discover -s installer/tests -p 'test_app.py'"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1"

@@ -56,6 +56,13 @@ Raspberry Pi
   screen in an iframe, scaled).
 - Light and dark theme follow the device; the wall screen stays white (owner decision).
 
+## Installer (`installer/`)
+
+`core.py` holds everything without a window (checks, config, deploy key and SSH alias, connecting a
+ZIP folder to GitHub, the install command with an askpass helper so the sudo password never lands
+in a file); `app.py` is a tkinter wizard over it, colored from the design tokens. The worker thread
+gets plain values, never Tk variables. "Kiosk einrichten.desktop" starts it from the file manager.
+
 ## Design
 
 White, quiet, no "AI look" (see the owner's guidelines): neutral panels with a hairline border,
