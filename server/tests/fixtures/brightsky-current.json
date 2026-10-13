@@ -1,0 +1,47 @@
+{
+  "weather": {
+    "source_id": 238685,
+    "timestamp": "2026-10-13T09:30:00+02:00",
+    "cloud_cover": 63,
+    "condition": "dry",
+    "dew_point": 6.1,
+    "icon": "partly-cloudy-day",
+    "precipitation_10": 0.0,
+    "precipitation_30": 0.0,
+    "precipitation_60": 0.0,
+    "pressure_msl": 1019.4,
+    "relative_humidity": 78,
+    "visibility": 32000,
+    "wind_direction_10": 240,
+    "wind_direction_30": 240,
+    "wind_direction_60": 230,
+    "wind_speed_10": 13.7,
+    "wind_speed_30": 13.0,
+    "wind_speed_60": 12.6,
+    "wind_gust_direction_10": 240,
+    "wind_gust_direction_30": 240,
+    "wind_gust_direction_60": 230,
+    "wind_gust_speed_10": 27.4,
+    "wind_gust_speed_30": 29.2,
+    "wind_gust_speed_60": 31.0,
+    "sunshine_30": 12.0,
+    "sunshine_60": 25.0,
+    "solar_10": 0.041,
+    "solar_30": 0.115,
+    "solar_60": 0.226,
+    "temperature": 10.4,
+    "fallback_source_ids": {}
+  },
+  "sources": [
+    {
+      "id": 238685,
+      "dwd_station_id": "02532",
+      "observation_type": "synop",
+      "lat": 51.2962,
+      "lon": 9.4424,
+      "height": 237.0,
+      "station_name": "Kassel",
+      "distance": 3036.0
+    }
+  ]
+}

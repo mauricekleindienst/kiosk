@@ -1,0 +1,31 @@
+{
+  "host": "127.0.0.1",
+  "port": 8080,
+  "timeZone": "Europe/Berlin",
+  "location": {
+    "name": "Kassel",
+    "lat": 51.3127,
+    "lon": 9.4797
+  },
+  "weather": {
+    "baseUrl": "https://api.brightsky.dev",
+    "refreshMinutes": 10
+  },
+  "news": {
+    "refreshMinutes": 10,
+    "maxAgeDays": 7,
+    "main": {
+      "title": "Rheinmetall",
+      "url": "https://news.google.com/rss/search?q=Rheinmetall&hl=de&gl=DE&ceid=DE:de",
+      "limit": 6
+    },
+    "side": {
+      "title": "Kassel und Region",
+      "url": "https://news.google.com/rss/search?q=Kassel&hl=de&gl=DE&ceid=DE:de",
+      "limit": 2
+    }
+  },
+  "display": {
+    "reloadAt": "03:30"
+  }
+}
