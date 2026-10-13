@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          # The oldest Python the Raspberry Pi target ships (Raspberry Pi OS Bookworm).
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Shell scripts
+        run: shellcheck scripts/*.sh
+      - name: Server tests
+        run: npm run test:server
+      - name: Raspberry Pi script tests
+        run: npm run test:scripts
+      - name: Unit and guard tests
+        run: npm run test:unit
+      - name: End-to-end tests
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
