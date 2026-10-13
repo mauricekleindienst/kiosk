@@ -84,6 +84,12 @@ class FakeUpstream:
             return fixture_json("brightsky-current.json")
         if "/alerts" in url:
             return fixture_json("brightsky-alerts.json")
+        if "/v8/finance/chart/" in url:
+            return fixture_json("yahoo-chart-rhm.json")
+        if "/departures" in url:
+            return fixture_json("transit-departures.json")
+        if "/locations" in url:
+            return fixture_json("transit-locations.json")
         return forecast(berlin(2026, 10, 13, 0), 24 * 8)
 
 

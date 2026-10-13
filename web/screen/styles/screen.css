@@ -226,6 +226,7 @@ body.asleep .screen {
 .clock-box {
   display: flex;
   flex: 1 1 auto;
+  overflow: hidden;
   flex-wrap: wrap;
   align-items: center;
   align-content: center;
@@ -1040,6 +1041,220 @@ body.asleep .screen {
 
 .slide-visible {
   opacity: 1;
+}
+
+/* Stock */
+
+.stock-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.stock-figures {
+  flex: none;
+}
+
+.stock-price {
+  font-size: min(3.2rem, 34cqh, 16cqw);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.stock-change {
+  margin-top: 0.25rem;
+  font-size: clamp(0.95rem, 11cqh, 1.25rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+}
+
+.stock-up {
+  color: var(--success);
+}
+
+.stock-down {
+  color: var(--danger);
+}
+
+.stock-flat {
+  color: var(--text-muted);
+}
+
+.stock-meta {
+  margin-top: 0.2rem;
+  overflow: hidden;
+  color: var(--text-subtle);
+  font-size: clamp(0.85rem, 9cqh, 0.95rem);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-chart {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
+}
+
+.stock-line {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.tile-stock[data-direction="up"] .stock-line {
+  stroke: var(--success);
+}
+
+.tile-stock[data-direction="down"] .stock-line {
+  stroke: var(--danger);
+}
+
+.stock-baseline {
+  stroke: var(--text-subtle);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Wide, short stock tiles: figures and curve side by side. */
+@container (aspect-ratio > 2.4) {
+  .stock-body {
+    flex-direction: row;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .stock-chart {
+    height: 100%;
+  }
+}
+
+@container (height < 9rem) {
+  .stock-meta {
+    display: none;
+  }
+
+  .tile-stock .panel-head {
+    margin-bottom: 0.5rem;
+  }
+}
+
+@container (height < 5.5rem) {
+  .tile-stock .panel-head {
+    display: none;
+  }
+}
+
+/* Departures */
+
+.departures {
+  display: flex;
+  flex-direction: column;
+}
+
+.departure {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.departure:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.departure-line {
+  min-width: 3.4rem;
+  padding: 0.2rem 0.6rem;
+  background: var(--bg-active);
+  border-radius: var(--radius-tile);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-bold);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.departure-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.departure-direction {
+  overflow: hidden;
+  font-size: 1.25rem;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.departure-detail {
+  color: var(--text-subtle);
+  font-size: 0.9rem;
+}
+
+.departure-detail:empty {
+  display: none;
+}
+
+.departure-time {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-items: end;
+  column-gap: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.departure-countdown,
+.departure-state {
+  grid-column: 1 / -1;
+  font-size: 1.35rem;
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.departure-state-cancelled {
+  color: var(--danger);
+}
+
+.departure-planned {
+  color: var(--text-subtle);
+  font-size: 0.9rem;
+}
+
+.departure-cancelled .departure-planned,
+.departure-cancelled .departure-direction {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.departure-delay {
+  color: var(--warning);
+  font-size: 0.9rem;
+  font-weight: var(--weight-semibold);
+}
+
+.departure-delay-late {
+  color: var(--danger);
+}
+
+@container (width < 26rem) {
+  .departure-detail {
+    display: none;
+  }
+
+  .departure-direction {
+    font-size: 1.1rem;
+  }
 }
 
 /* Setup notice, until an admin password exists. */

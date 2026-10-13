@@ -1,5 +1,5 @@
-"""The kiosk server: refreshes weather and news in the background, serves the screen locally and
-the admin interface to the local network."""
+"""The kiosk server: refreshes weather, news, share prices and departures in the background, serves
+the screen locally and the admin interface to the local network, and updates itself at night."""
 
 import argparse
 import hashlib
@@ -12,13 +12,15 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from . import __version__, feeds, http_client, weather
+from . import __version__, feeds, http_client, stock, transit, weather
 from .auth import Auth
 from .config import ConfigError, load_config
 from .http_api import AdminHandler, ScreenHandler
 from .netinfo import lan_addresses
+from .schedule import is_sleeping
 from .settings import SettingsStore, default_settings, load_catalog
 from .store import Store
+from .updates import Updater, installed_version
 from .uploads import Uploads
 
 log = logging.getLogger("kiosk")
@@ -28,6 +30,8 @@ RETRY_SECONDS = 60
 SCHEDULER_TICK_SECONDS = 2
 # The server keeps more headlines than any widget shows; each widget applies its own limit.
 HEADLINES_KEPT = 12
+# Exit code after an update: systemd (Restart=always) starts the new version.
+RESTART_EXIT_CODE = 3
 
 
 def _utc_now():
@@ -59,7 +63,11 @@ class Kiosk:
         self._reload_token = 0
         self._screen = None
         self._started = clock()
+        # Changes with every start: the screen reloads when the server restarted (after an update).
+        self.build = f"{__version__}-{self._started.timestamp():.0f}"
+        self.version = installed_version(__version__)
         self.admin_port = None
+        self.updater = None
         self._apply(settings.get()[0])
         settings.on_change(self._apply)
 
@@ -74,14 +82,27 @@ class Kiosk:
     def news_key(url):
         return _key("news", url)
 
+    @staticmethod
+    def source_of(widget):
+        """(key, kind, argument) of the data a widget needs, or None. Equal arguments share a key."""
+        options = widget["options"]
+        if widget["type"] == "news":
+            return _key("news", options["url"]), "news", options["url"]
+        if widget["type"] == "stock":
+            return _key("stock", options["symbol"]), "stock", options["symbol"]
+        if widget["type"] == "transit" and options["stop"]:
+            argument = (options["stop"]["id"], tuple(options["products"]))
+            return _key("transit", *argument[:1], *argument[1]), "transit", argument
+        return None
+
     def _apply(self, settings):
-        weather_minutes = self.config["weather"]["refreshMinutes"]
-        news_minutes = self.config["news"]["refreshMinutes"]
-        wanted = {self.weather_key(settings): ("weather", settings, weather_minutes * 60)}
+        minutes = {kind: self.config[kind]["refreshMinutes"] for kind in ("weather", "news", "stock", "transit")}
+        wanted = {self.weather_key(settings): ("weather", settings, minutes["weather"] * 60)}
         for widget in settings["widgets"]:
-            if widget["type"] == "news":
-                url = widget["options"]["url"]
-                wanted[self.news_key(url)] = ("news", url, news_minutes * 60)
+            source = self.source_of(widget)
+            if source:
+                key, kind, argument = source
+                wanted[key] = (kind, argument, minutes[kind] * 60)
         with self._lock:
             self._sources = wanted
             self._due = {key: self._due.get(key, 0.0) for key in wanted}
@@ -110,6 +131,18 @@ class Kiosk:
             alerts = None
         return weather.build_weather(current, forecast, alerts, now, location["name"], location["lat"], location["lon"], tz)
 
+    def _refresh_stock(self, symbol, now):
+        return stock.build_quote(self._fetch_json(stock.request_url(self.config["stock"]["baseUrl"], symbol)))
+
+    def _refresh_transit(self, argument, now):
+        stop_id, products = argument
+        raw = self._fetch_json(transit.departures_url(self.config["transit"]["baseUrl"], stop_id, products))
+        return transit.build_departures(raw, now)
+
+    def search_stops(self, text):
+        """Stops matching a name, for the admin's stop search."""
+        return transit.build_stops(self._fetch_json(transit.locations_url(self.config["transit"]["baseUrl"], text)))
+
     def _refresh_news(self, url, now):
         headlines = feeds.parse_feed(self._fetch(url, accept="application/rss+xml, application/atom+xml, text/xml"))
         picked = feeds.select_headlines(headlines, now, HEADLINES_KEPT, float(self.config["news"]["maxAgeDays"]))
@@ -124,10 +157,9 @@ class Kiosk:
             now = self._clock()
             next_due = monotonic_now + interval
             try:
-                if kind == "weather":
-                    data = self._refresh_weather(argument, now)
-                else:
-                    data = self._refresh_news(argument, now)
+                refresh = {"weather": self._refresh_weather, "news": self._refresh_news,
+                           "stock": self._refresh_stock, "transit": self._refresh_transit}[kind]
+                data = refresh(argument, now)
             except (http_client.FetchError, feeds.FeedError) as err:
                 log.warning("Refreshing %s failed, keeping the last good data: %s", key, err)
                 self.store.fail(key, str(err))
@@ -157,28 +189,37 @@ class Kiosk:
     def revision(self):
         with self._lock:
             revision = {"settings": self.settings.revision, "data": self._data_version, "reload": self._reload_token}
-        # The setup notice must vanish from the screen as soon as a password exists.
-        return {**revision, "setup": self.auth.setup_required}
+        # The setup notice must vanish from the screen as soon as a password exists; a new build
+        # (a restart after an update) makes the screen load the new files.
+        return {**revision, "setup": self.auth.setup_required, "build": self.build}
+
+    def display(self):
+        """Whether the monitor should be on now, for scripts/display-power.sh on the Pi."""
+        settings, _ = self.settings.get()
+        sleep = settings["display"]["sleep"]
+        local_now = self._clock().astimezone(ZoneInfo(settings["timeZone"]))
+        return {"on": not is_sleeping(sleep, local_now), "powerOff": sleep["powerOff"], "cec": sleep["cec"]}
 
     def state(self, include_setup=False):
         settings, revision = self.settings.get()
         entries = self.store.snapshot()
-        news_minutes = self.config["news"]["refreshMinutes"]
 
-        def source(key, minutes):
+        def source(key, kind):
             entry = entries.get(key) or {}
             return {"data": entry.get("data"), "fetchedAt": entry.get("fetchedAt"), "error": entry.get("error"),
-                    "refreshMinutes": minutes}
+                    "refreshMinutes": self.config[kind]["refreshMinutes"]}
 
+        widgets = {}
+        for widget in settings["widgets"]:
+            found = self.source_of(widget)
+            if found:
+                widgets[widget["id"]] = source(found[0], found[1])
         state = {
             "serverTime": self._clock().isoformat(),
             "revision": self.revision(),
             "settings": settings,
-            "weather": source(self.weather_key(settings), self.config["weather"]["refreshMinutes"]),
-            "news": {
-                widget["id"]: source(self.news_key(widget["options"]["url"]), news_minutes)
-                for widget in settings["widgets"] if widget["type"] == "news"
-            },
+            "weather": source(self.weather_key(settings), "weather"),
+            "widgets": widgets,
             "setup": None,
         }
         code = self.auth.setup_code if include_setup else None
@@ -211,20 +252,37 @@ class Kiosk:
         sources = [{"label": f"Wetter für {settings['location']['name']}", **self._entry(entries, self.weather_key(settings))}]
         seen = set()
         for widget in settings["widgets"]:
-            if widget["type"] == "news" and widget["options"]["url"] not in seen:
-                seen.add(widget["options"]["url"])
-                sources.append({"label": f"Nachrichten „{widget['options']['title']}“",
-                                **self._entry(entries, self.news_key(widget["options"]["url"]))})
+            found = self.source_of(widget)
+            if not found or found[0] in seen:
+                continue
+            seen.add(found[0])
+            options = widget["options"]
+            label = {
+                "news": lambda: f"Nachrichten „{options['title']}“",
+                "stock": lambda: f"Aktie {options['symbol']}",
+                "transit": lambda: f"Abfahrten {options['stop']['name']}",
+            }[widget["type"]]()
+            sources.append({"label": label, **self._entry(entries, found[0])})
         with self._lock:
             screen = dict(self._screen) if self._screen else None
+        updates = settings["updates"]
         return {
-            "version": __version__,
+            "version": self.version,
             "startedAt": self._started.isoformat(),
             "serverTime": self._clock().isoformat(),
             "addresses": [f"http://{address}:{self.admin_port}" for address in lan_addresses()] if self.admin_port else [],
             "screen": screen,
             "sources": sources,
+            "updates": {**updates, **(self.updater.status if self.updater else {})},
         }
+
+    def tick(self):
+        """Scheduler work besides the sources: the nightly update."""
+        if not self.updater:
+            return
+        settings, _ = self.settings.get()
+        if self.updater.due(settings, self._clock().astimezone(ZoneInfo(settings["timeZone"]))):
+            self.updater.start()
 
     @staticmethod
     def _entry(entries, key):
@@ -242,7 +300,17 @@ def make_server(kiosk, host, port, handler):
 def _scheduler(kiosk, stop):
     while not stop.is_set():
         kiosk.run_due()
+        kiosk.tick()
         stop.wait(SCHEDULER_TICK_SECONDS)
+
+
+def self_test():
+    """Loads everything a start needs; the updater runs this before it keeps a new version."""
+    config = load_config(None)
+    catalog = load_catalog()
+    default_settings(config, catalog)
+    log.info("Self-test passed")
+    return 0
 
 
 def main(argv=None):
@@ -258,9 +326,16 @@ def main(argv=None):
     parser.add_argument("--port", type=int, help="overrides the screen port from the configuration")
     parser.add_argument("--admin-port", type=int, help="overrides the admin port from the configuration")
     parser.add_argument("--verbose", action="store_true", help="log every request")
+    parser.add_argument("--self-test", action="store_true", help="check that this version can start, then exit")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(levelname)s %(message)s")
+    if args.self_test:
+        try:
+            return self_test()
+        except Exception:  # noqa: BLE001 - any failure means: do not keep this version
+            log.exception("Self-test failed")
+            return 1
     try:
         config = load_config(args.config)
     except (ConfigError, OSError) as err:
@@ -284,6 +359,14 @@ def main(argv=None):
         log.error("Cannot listen: %s", err)
         return 2
 
+    restart = threading.Event()
+
+    def after_update():
+        restart.set()
+        # shutdown() waits for serve_forever, so it runs in its own thread.
+        threading.Thread(target=servers[0].shutdown, daemon=True).start()
+
+    kiosk.updater = Updater(kiosk._clock, after_update, state_dir / "update-status.json")
     stop = threading.Event()
     threading.Thread(target=_scheduler, args=(kiosk, stop), name="scheduler", daemon=True).start()
     for server in servers[1:]:
@@ -301,4 +384,7 @@ def main(argv=None):
             server.shutdown()
         for server in servers:
             server.server_close()
+    if restart.is_set():
+        log.info("Restarting with the new version")
+        return RESTART_EXIT_CODE
     return 0

@@ -10,7 +10,7 @@ from helpers import PNG, make_kiosk
 
 
 def news_of(state, widget_id):
-    return state["news"][widget_id]
+    return state["widgets"][widget_id]
 
 
 class KioskTest(unittest.TestCase):
@@ -153,6 +153,63 @@ class KioskTest(unittest.TestCase):
 
         self.change(use)
         self.assertEqual(self.kiosk.upload_usage()[item["id"]], ["Firmenlogo", "Kachel „Logo“"])
+
+    def add_widgets(self, *widgets):
+        def mutate(settings):
+            settings["widgets"][3].update(y=4, h=4)
+            settings["widgets"].extend(widgets)
+
+        return self.change(mutate)
+
+    def test_stock_and_transit_widgets_get_their_data(self):
+        stop = {"id": "8000193", "name": "Kassel Hbf"}
+        self.add_widgets(
+            {"id": "stock", "type": "stock", "x": 7, "y": 0, "w": 5, "h": 2, "options": {}},
+            {"id": "transit", "type": "transit", "x": 7, "y": 2, "w": 5, "h": 2, "options": {"stop": stop, "products": ["tram", "bus"]}},
+        )
+        self.kiosk.run_due(0)
+        state = self.kiosk.state()
+        self.assertEqual(state["widgets"]["stock"]["data"]["price"], 1848.5)
+        self.assertEqual(state["widgets"]["stock"]["refreshMinutes"], 5)
+        self.assertEqual(state["widgets"]["transit"]["data"][0]["line"], "Bus 16")
+        transit_requests = [url for url in self.upstream.requests if "/departures" in url]
+        self.assertEqual(len(transit_requests), 1)
+        self.assertIn("tram=true", transit_requests[0])
+        self.assertIn("regional=false", transit_requests[0])
+        labels = [source["label"] for source in self.kiosk.status()["sources"]]
+        self.assertIn("Aktie RHM.DE", labels)
+        self.assertIn("Abfahrten Kassel Hbf", labels)
+
+    def test_a_transit_tile_without_a_stop_fetches_nothing(self):
+        self.add_widgets({"id": "transit", "type": "transit", "x": 7, "y": 0, "w": 5, "h": 4, "options": {}})
+        self.kiosk.run_due(0)
+        self.assertNotIn("transit", self.kiosk.state()["widgets"])
+        self.assertFalse([url for url in self.upstream.requests if "/departures" in url])
+
+    def test_display_follows_the_night_schedule(self):
+        def night(settings):
+            settings["display"]["sleep"].update(enabled=True, **{"from": "09:00", "to": "10:00"})
+
+        self.assertEqual(self.kiosk.display(), {"on": True, "powerOff": True, "cec": False})
+        self.change(night)
+        self.assertEqual(self.kiosk.display()["on"], False, "9:41 is inside 9-10")
+
+    def test_nightly_update_is_started_at_its_time(self):
+        started = []
+        self.kiosk.updater = type("FakeUpdater", (), {
+            "due": lambda _self, settings, local: local.strftime("%H:%M") == settings["updates"]["time"],
+            "start": lambda _self: started.append(True),
+            "status": {},
+        })()
+
+        def at_941(settings):
+            settings["updates"]["time"] = "09:41"
+
+        self.kiosk.tick()
+        self.assertEqual(started, [])
+        self.change(at_941)
+        self.kiosk.tick()
+        self.assertEqual(started, [True])
 
     def test_status_lists_sources_and_screen(self):
         self.kiosk.run_due(0)

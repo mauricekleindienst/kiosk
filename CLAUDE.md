@@ -28,7 +28,12 @@ where it is more specific.
 - Runtime on the Pi: only what Raspberry Pi OS ships (Python 3.11+, Chromium, curl). No Node, no pip
   packages, no build step. Node and Playwright are for tests only.
 - Data sources: weather from DWD open data via Bright Sky (no key, commercial use allowed);
-  news from Google News RSS searches, configurable to any RSS/Atom feed.
+  news from Google News RSS searches, configurable to any RSS/Atom feed; departures from
+  v6.db.transport.rest; share prices from Yahoo Finance's unofficial chart endpoint, chosen as the
+  free default while the owner decides on a licensed provider (keep `stock.py` swappable).
+- Night mode switches the monitor's signal off (wlr-randr/xset) by default; HDMI-CEC is optional.
+- Self-update: nightly, fast-forward only, self-test before keeping a version, never over local
+  changes; private repos need a read-only deploy key on the Pi.
 
 ## Code rules
 

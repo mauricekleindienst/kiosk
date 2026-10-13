@@ -13,7 +13,11 @@ STUBS = {
     "sudo": 'echo "sudo $*" >> "$STUB_LOG"',
     "systemctl": 'echo "systemctl $*" >> "$STUB_LOG"',
     "raspi-config": 'echo "raspi-config $*" >> "$STUB_LOG"',
-    "curl": "exit 0",
+    # The display helper asks the server; the test decides the answer.
+    "curl": 'printf "%s" "${CURL_ANSWER:-}"',
+    "wlr-randr": 'if [ $# -eq 0 ]; then printf "HDMI-A-1 \\"Dell U2720Q\\"\\n  Enabled: yes\\nHDMI-A-2 \\"TV\\"\\n  Enabled: yes\\n"; else echo "wlr-randr $*" >> "$STUB_LOG"; fi',
+    "cec-ctl": 'echo "cec-ctl $*" >> "$STUB_LOG"',
+    "xset": 'echo "xset $*" >> "$STUB_LOG"',
     # The tests may run as root (containers); the scripts must believe they run as a normal user.
     "id": "echo 1000",
     # Records its arguments, then ends the endless relaunch loop of start-browser.sh.
@@ -40,6 +44,8 @@ class ScriptsTest(unittest.TestCase):
             "USER": "pi",
             "PATH": f"{bin_dir}:/usr/bin:/bin",
             "STUB_LOG": str(self.log),
+            # The display helper runs one round in tests instead of looping forever.
+            "KIOSK_DISPLAY_ONCE": "1",
         }
 
     def run_script(self, name, check=True):
@@ -95,6 +101,38 @@ class ScriptsTest(unittest.TestCase):
         self.assertIn("--kiosk", call)
         self.assertIn("http://127.0.0.1:8123/", call)
         self.assertIn(f"--user-data-dir={self.home}/.local/share/kiosk/chromium", call)
+
+
+    def run_display(self, answer, **env):
+        self.env.update(CURL_ANSWER=answer, **env)
+        result = self.run_script("display-power.sh")
+        return result.stdout, self.log.read_text()
+
+    def test_night_switches_every_wayland_output_off(self):
+        output, calls = self.run_display('{"on": false, "powerOff": true, "cec": false}', WAYLAND_DISPLAY="wayland-0")
+        self.assertIn("display off", output)
+        self.assertIn("wlr-randr --output HDMI-A-1 --off", calls)
+        self.assertIn("wlr-randr --output HDMI-A-2 --off", calls)
+        self.assertNotIn("cec-ctl", calls)
+
+    def test_day_switches_on_and_wakes_the_tv(self):
+        _, calls = self.run_display('{"on": true, "powerOff": true, "cec": true}', WAYLAND_DISPLAY="wayland-0")
+        self.assertIn("wlr-randr --output HDMI-A-1 --on", calls)
+        self.assertIn("cec-ctl --playback --to 0 --image-view-on", calls)
+
+    def test_black_only_leaves_the_signal_on_but_still_sends_cec(self):
+        _, calls = self.run_display('{"on": false, "powerOff": false, "cec": true}', WAYLAND_DISPLAY="wayland-0")
+        self.assertNotIn("wlr-randr --output", calls)
+        self.assertIn("cec-ctl --playback --to 0 --standby", calls)
+
+    def test_x11_uses_dpms(self):
+        _, calls = self.run_display('{"on": false, "powerOff": true, "cec": false}', DISPLAY=":0")
+        self.assertIn("xset dpms force off", calls)
+
+    def test_no_answer_changes_nothing(self):
+        output, calls = self.run_display("", WAYLAND_DISPLAY="wayland-0")
+        self.assertEqual(output, "")
+        self.assertEqual(calls, "")
 
 
 if __name__ == "__main__":

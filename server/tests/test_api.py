@@ -71,13 +71,13 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(state["setup"]["code"], self.kiosk.auth.setup_code)
         self.assertTrue(all(url.endswith(f":{self.kiosk.admin_port}") for url in state["setup"]["urls"]))
-        self.assertEqual(state["news"]["news-main"]["data"][0]["source"], "Handelsblatt")
+        self.assertEqual(state["widgets"]["news-main"]["data"][0]["source"], "Handelsblatt")
         self.assertEqual(headers["Cache-Control"], "no-store")
 
     def test_screen_revision_records_the_screen_size(self):
         status, _, revision = self.screen.request("GET", "/api/revision?w=1920&h=1080")
         self.assertEqual(status, 200)
-        self.assertEqual(set(revision), {"settings", "data", "reload", "setup"})
+        self.assertEqual(set(revision), {"settings", "data", "reload", "setup", "build"})
         self.assertEqual(self.kiosk.status()["screen"]["width"], 1920)
 
     def test_screen_port_has_no_admin_api_and_no_writes(self):
@@ -215,6 +215,40 @@ class ApiTest(unittest.TestCase):
         self.assertIsNone(state["setup"])
         self.admin.request("GET", "/screen/api/revision?w=300&h=200")
         self.assertIsNone(self.kiosk.status()["screen"], "the preview does not pose as the real screen")
+
+    def test_display_state_only_on_the_screen_port(self):
+        status, _, display = self.screen.request("GET", "/api/display")
+        self.assertEqual((status, display), (200, {"on": True, "powerOff": True, "cec": False}))
+        self.sign_up()
+        self.assertEqual(self.admin.request("GET", "/api/display")[0], 404)
+
+    def test_stop_search_needs_login_and_two_letters(self):
+        self.assertEqual(self.admin.request("GET", "/api/admin/transit/stops?query=Kassel")[0], 401)
+        self.sign_up()
+        self.assertEqual(self.admin.request("GET", "/api/admin/transit/stops?query=K")[0], 400)
+        status, _, body = self.admin.request("GET", "/api/admin/transit/stops?query=Kassel%20Hbf")
+        self.assertEqual(status, 200)
+        self.assertEqual(body["stops"][0], {"id": "8000193", "name": "Kassel Hbf"})
+        self.kiosk.upstream.failing.add("/locations")
+        status, _, body = self.admin.request("GET", "/api/admin/transit/stops?query=Kassel")
+        self.assertEqual(status, 502)
+        self.assertIn("Fahrplanauskunft", body["error"]["message"])
+
+    def test_update_check_runs_once_at_a_time(self):
+        self.sign_up()
+        calls = []
+
+        class FakeUpdater:
+            status = {}
+
+            def start(self):
+                calls.append(1)
+                return len(calls) == 1
+
+        self.kiosk.updater = FakeUpdater()
+        self.assertEqual(self.admin.request("POST", "/api/admin/updates/check", {})[0], 202)
+        self.assertEqual(self.admin.request("POST", "/api/admin/updates/check", {})[0], 409)
+        self.assertEqual(self.admin.request("POST", "/api/admin/updates/check", {}, origin="http://evil.example")[0], 403)
 
     def test_admin_page_is_served(self):
         status, headers, body = self.admin.request("GET", "/")

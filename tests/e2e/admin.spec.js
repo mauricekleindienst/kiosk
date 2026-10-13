@@ -131,6 +131,51 @@ test("a new message tile shows up on the screen within seconds", async ({ page, 
   await expect(screen.locator(".tile-message")).toHaveClass(/message-highlight/, { timeout: 10_000 });
 });
 
+test("departures: search a stop, pick it, the screen shows its departures", async ({ page, context }) => {
+  await openAdmin(page);
+  const screen = await context.newPage();
+  await screen.goto(SCREEN);
+  await shrinkWeather(page);
+  await page.getByRole("button", { name: "Abfahrten hinzufügen" }).click();
+  const inspector = page.locator(".inspector");
+  await expect(inspector.getByText("Noch keine Haltestelle gewählt.")).toBeVisible();
+  await expect(screen.locator(".tile-transit .placeholder")).toContainText("Noch keine Haltestelle gewählt", { timeout: 10_000 });
+
+  await inspector.getByRole("searchbox", { name: "Haltestelle suchen" }).fill("Kassel Rat");
+  await inspector.getByRole("button", { name: "Kassel Rathaus" }).click();
+  await expect(inspector.locator(".stop-current")).toHaveText("Kassel Rathaus");
+  await expect(screen.locator(".tile-transit .panel-title")).toHaveText("Kassel Rathaus", { timeout: 10_000 });
+  await expect(screen.locator(".tile-transit .departure").first()).toBeVisible({ timeout: 10_000 });
+
+  await inspector.getByLabel("Bus").uncheck();
+  await expect.poll(async () => (await getSettings(page.request)).settings.widgets.find((w) => w.type === "transit").options.products)
+    .not.toContain("bus");
+});
+
+test("night: the monitor can be switched off, and TVs over HDMI-CEC", async ({ page }) => {
+  await openAdmin(page, "settings");
+  await expect(page.getByLabel("Monitor ausschalten statt nur schwarz")).toBeDisabled();
+  await page.getByLabel("Nachts abschalten").check();
+  await expect(page.getByLabel("Monitor ausschalten statt nur schwarz")).toBeEnabled();
+  await page.getByLabel("Fernseher über HDMI-CEC ein- und ausschalten").check();
+  await expect.poll(async () => (await getSettings(page.request)).settings.display.sleep)
+    .toMatchObject({ enabled: true, powerOff: true, cec: true });
+  const display = await (await page.request.get(`${SCREEN}/api/display`)).json();
+  expect(display).toMatchObject({ powerOff: true, cec: true });
+});
+
+test("updates: switch off, set the time, check now", async ({ page }) => {
+  await openAdmin(page, "device");
+  await expect(page.getByText("Noch nicht gesucht.")).toBeVisible();
+  await page.getByLabel("Um").fill("04:20");
+  await page.getByLabel("Um").dispatchEvent("change");
+  await expect.poll(async () => (await getSettings(page.request)).settings.updates.time).toBe("04:20");
+  await page.getByRole("button", { name: "Jetzt nach Updates suchen" }).click();
+  await expect(page.getByText(/^Zuletzt gerade eben: Bereits aktuell\.$/)).toBeVisible({ timeout: 15_000 });
+  await page.getByLabel("Automatisch aktualisieren").uncheck();
+  await expect.poll(async () => (await getSettings(page.request)).settings.updates.enabled).toBe(false);
+});
+
 test("a feed URL that is not http(s) is refused at the field", async ({ page }) => {
   await openAdmin(page);
   await (await tile(page, "news-main")).click();

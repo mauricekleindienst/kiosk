@@ -1,0 +1,37 @@
+[
+ {
+  "type": "station",
+  "id": "8000193",
+  "name": "Kassel Hbf",
+  "location": {
+   "type": "location",
+   "id": "8000193",
+   "latitude": 51.318,
+   "longitude": 9.489
+  },
+  "products": {
+   "tram": true
+  }
+ },
+ {
+  "type": "stop",
+  "id": "706070",
+  "name": "Kassel Rathaus",
+  "location": {
+   "type": "location",
+   "latitude": 51.312,
+   "longitude": 9.493
+  }
+ },
+ {
+  "type": "location",
+  "id": "a1",
+  "address": "Kassel, Friedrichsplatz",
+  "latitude": 51.3,
+  "longitude": 9.4
+ },
+ {
+  "type": "stop",
+  "name": "ohne Kennung"
+ }
+]

@@ -53,7 +53,7 @@ async function layoutReport(page) {
         return box.left >= 0 && box.top >= 0 && box.right <= innerWidth + 0.5 && box.bottom <= innerHeight + 0.5;
       }),
       cut: [...document.querySelectorAll(".tile")].flatMap((tile) =>
-        [...tile.querySelectorAll(".headline, .day, .zone, .big-number, .big-label, .message-title, .clock-time, .clock-date, .now, .calendar-day")]
+        [...tile.querySelectorAll(".headline, .day, .zone, .big-number, .big-label, .message-title, .clock-time, .clock-date, .now, .calendar-day, .stock-price, .stock-change, .departure")]
           .filter((item) => item.offsetParent !== null && !inside(item, tile))
           .map((item) => `${tile.dataset.widget}: ${item.className} "${item.textContent.slice(0, 40)}"`)),
       clockSize: parseFloat(getComputedStyle(document.querySelector(".clock-time") ?? document.body).fontSize),
@@ -113,20 +113,21 @@ test("every widget type at every size: nothing overflows, nothing is cut", async
   const settings = structuredClone(defaults);
   settings.logo = image.id;
   settings.widgets = [
-    { id: "clock", type: "clock", x: 0, y: 0, w: 4, h: 2, options: { style: "analog", showSeconds: true, showLogo: true } },
-    { id: "clock-2", type: "clock", x: 4, y: 0, w: 4, h: 1, options: { showSeconds: true } },
-    { id: "logo", type: "logo", x: 4, y: 1, w: 2, h: 1, options: {} },
-    { id: "counter", type: "counter", x: 6, y: 1, w: 2, h: 1, options: { since: "2026-01-05" } },
-    { id: "weather", type: "weather", x: 8, y: 0, w: 4, h: 5, options: {} },
-    { id: "news", type: "news", x: 0, y: 2, w: 5, h: 3, options: { title: "Rheinmetall", url: defaults.widgets[1].options.url } },
-    { id: "calendar", type: "calendar", x: 5, y: 2, w: 3, h: 3, options: {} },
-    { id: "message", type: "message", x: 0, y: 5, w: 4, h: 3, options: {
+    { id: "clock", type: "clock", x: 0, y: 0, w: 3, h: 2, options: { style: "analog", showSeconds: true, showLogo: true } },
+    { id: "clock-2", type: "clock", x: 3, y: 0, w: 4, h: 1, options: { showSeconds: true } },
+    { id: "logo", type: "logo", x: 3, y: 1, w: 2, h: 1, options: {} },
+    { id: "counter", type: "counter", x: 5, y: 1, w: 2, h: 1, options: { since: "2026-01-05" } },
+    { id: "weather", type: "weather", x: 7, y: 0, w: 5, h: 4, options: {} },
+    { id: "news", type: "news", x: 0, y: 2, w: 4, h: 3, options: { title: "Rheinmetall", url: defaults.widgets[1].options.url } },
+    { id: "calendar", type: "calendar", x: 4, y: 2, w: 3, h: 3, options: {} },
+    { id: "stock", type: "stock", x: 7, y: 4, w: 3, h: 2, options: {} },
+    { id: "countdown", type: "countdown", x: 10, y: 4, w: 2, h: 1, options: { label: "Sommerfest", date: "2027-07-02" } },
+    { id: "worldclock", type: "worldclock", x: 10, y: 5, w: 2, h: 3, options: {} },
+    { id: "transit", type: "transit", x: 0, y: 5, w: 4, h: 3, options: { stop: { id: "706070", name: "Kassel Rathaus" } } },
+    { id: "message", type: "message", x: 4, y: 5, w: 3, h: 3, options: {
       title: "Herzlich willkommen, liebe Gäste aus Unterlüß", body: "Besprechung im Raum „Fulda“ ab 10 Uhr.\nKaffee steht bereit.", size: "large", highlight: true,
     } },
-    { id: "countdown", type: "countdown", x: 4, y: 5, w: 2, h: 1, options: { label: "Sommerfest", date: "2027-07-02" } },
-    { id: "worldclock", type: "worldclock", x: 4, y: 6, w: 2, h: 2, options: {} },
-    { id: "slideshow", type: "slideshow", x: 6, y: 5, w: 3, h: 3, options: { images: [image.id], seconds: 5 } },
-    { id: "news-2", type: "news", x: 9, y: 5, w: 3, h: 3, options: { title: "Kassel", url: defaults.widgets[2].options.url, lead: false } },
+    { id: "slideshow", type: "slideshow", x: 7, y: 6, w: 3, h: 2, options: { images: [image.id], seconds: 5 } },
   ];
   await putSettings(page.request, settings);
 
@@ -138,6 +139,8 @@ test("every widget type at every size: nothing overflows, nothing is cut", async
     await expect(page.locator(".tile-calendar .calendar-today")).toHaveCount(1);
     await expect(page.locator(".tile-countdown .big-number")).toHaveText(/^\d+$/);
     await expect(page.locator(".tile-counter .big-label")).toContainText("Tage ohne Arbeitsunfall");
+    await expect(page.locator(".tile-stock .stock-price")).toHaveText(/^1\.8\d\d,\d\d\s€$/);
+    await expect(page.locator(".tile-transit .departure").first()).toBeVisible();
     await expect.poll(() => page.locator(".tile-logo .logo-image").evaluate((img) => img.naturalWidth)).toBe(8);
     const report = await layoutReport(page);
     expect(report.scroll, `${size.name}: no scrolling`).toEqual(report.viewport);
@@ -161,11 +164,43 @@ test("the analog clock shows the time", async ({ page }) => {
   expect(angles.hour).toBeCloseTo(307.75, 1);
 });
 
+test("stock tile: price, change against yesterday and the day's curve", async ({ page }) => {
+  const settings = structuredClone(defaults);
+  settings.widgets[0].w = 4;
+  settings.widgets.push({ id: "stock", type: "stock", x: 4, y: 0, w: 3, h: 2, options: {} });
+  await putSettings(page.request, settings);
+  await loaded(page);
+  const tile = page.locator(".tile-stock");
+  await expect(tile.locator(".panel-title")).toHaveText("Rheinmetall");
+  await expect(tile.locator(".stock-change")).toHaveText(/^[+\u2212][\d.,]+\s€ \([+\u2212][\d,]+\u202f%\)$/);
+  await expect(tile.locator(".stock-meta")).toContainText("XETRA · Stand");
+  expect(await tile.locator(".stock-line").getAttribute("points")).toMatch(/^[\d.]+,[\d.]+( [\d.]+,[\d.]+)+$/);
+  await expect(tile.locator(".stock-baseline")).toHaveCount(1);
+});
+
+test("departures: soonest first, delays and cancellations, walking time hides what is out of reach", async ({ page }) => {
+  const settings = structuredClone(defaults);
+  settings.widgets[3].h = 4;
+  settings.widgets.push({ id: "transit", type: "transit", x: 7, y: 4, w: 5, h: 4, options: { stop: { id: "706070", name: "Kassel Rathaus" } } });
+  await putSettings(page.request, settings);
+  await loaded(page);
+  const tile = page.locator(".tile-transit");
+  await expect(tile.locator(".panel-title")).toHaveText("Kassel Rathaus");
+  await expect(tile.locator(".departure-line").first()).toHaveText("1");
+  await expect(tile.locator(".departure").nth(1).locator(".departure-delay")).toHaveText("+2");
+  await expect(tile.locator(".departure-cancelled .departure-state")).toHaveText("fällt aus");
+  await expect(tile.locator(".departure").nth(3).locator(".departure-delay")).toHaveClass(/departure-delay-late/);
+
+  settings.widgets.at(-1).options.walkMinutes = 5;
+  await putSettings(page.request, settings);
+  await expect(tile.locator(".departure-line").first()).toHaveText("4", { timeout: 10_000 });
+});
+
 test("feed text is shown as text, never as markup", async ({ page }) => {
   await page.route("**/api/state", async (route) => {
     const response = await route.fetch();
     const state = await response.json();
-    state.news["news-main"].data[0].title = '<img src=x onerror="document.title=1">Übernahme & Co.';
+    state.widgets["news-main"].data[0].title = '<img src=x onerror="document.title=1">Übernahme & Co.';
     await route.fulfill({ response, json: state });
   });
   await loaded(page);
@@ -196,7 +231,7 @@ test("an unreachable weather service on first start explains itself", async ({ p
     const response = await route.fetch();
     const state = await response.json();
     state.weather = { data: null, fetchedAt: null, error: "api.brightsky.dev is not reachable", refreshMinutes: 10 };
-    state.news["news-side"] = { ...state.news["news-side"], data: [] };
+    state.widgets["news-side"] = { ...state.widgets["news-side"], data: [] };
     await route.fulfill({ response, json: state });
   });
   await loaded(page);

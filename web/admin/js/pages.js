@@ -189,6 +189,14 @@ export function settingsView(container) {
     weekends.addEventListener("change", () => commit((next) => {
       next.display.sleep.weekends = weekends.checked;
     }, t.saved));
+    const powerOff = h("input", { type: "checkbox", class: "switch", checked: sleep.powerOff, disabled: !sleep.enabled });
+    powerOff.addEventListener("change", () => commit((next) => {
+      next.display.sleep.powerOff = powerOff.checked;
+    }, t.saved));
+    const cec = h("input", { type: "checkbox", class: "switch", checked: sleep.cec, disabled: !sleep.enabled });
+    cec.addEventListener("change", () => commit((next) => {
+      next.display.sleep.cec = cec.checked;
+    }, t.saved));
     const reloadAt = h("input", { class: "input", type: "time", value: s.display.reloadAt });
     reloadAt.addEventListener("change", () => commit((next) => {
       next.display.reloadAt = reloadAt.value;
@@ -214,6 +222,8 @@ export function settingsView(container) {
           field(t.sleepEnabled, sleepEnabled, { inline: true, hint: t.sleepHint }),
           h("div", { class: "field-pair" }, field(t.sleepFrom, from), field(t.sleepTo, to)),
           field(t.sleepWeekends, weekends, { inline: true }),
+          field(t.sleepPowerOff, powerOff, { inline: true, hint: t.sleepPowerOffHint }),
+          field(t.sleepCec, cec, { inline: true, hint: t.sleepCecHint }),
           field(t.reloadAt, reloadAt, { hint: t.reloadHint }))));
   };
   rerender();
@@ -221,6 +231,41 @@ export function settingsView(container) {
 }
 
 // Device
+
+function updatesCard(status, refresh) {
+  const updates = status.updates;
+  const enabled = h("input", { type: "checkbox", class: "switch", checked: updates.enabled });
+  const time = h("input", { class: "input", type: "time", value: updates.time, disabled: !updates.enabled });
+  const change = (mutate) => {
+    const next = draft();
+    mutate(next.updates);
+    save(next, t.saved).then(refresh);
+  };
+  enabled.addEventListener("change", () => change((next) => {
+    next.enabled = enabled.checked;
+  }));
+  time.addEventListener("change", () => change((next) => {
+    next.time = time.value;
+  }));
+  const last = updates.running
+    ? t.updatesChecking
+    : updates.lastCheck ? t.updatesLast(ago(updates.lastCheck), updates.message) : t.updatesNever;
+  const check = button(t.updatesCheck, async () => {
+    try {
+      await api.checkUpdates();
+      toast(t.updatesStarted);
+    } catch (error) {
+      toast(error.message, { tone: "error" });
+    }
+    refresh();
+  }, { disabled: updates.running });
+  return card(t.updatesTitle,
+    h("div", { class: "form" },
+      field(t.updatesEnabled, enabled, { inline: true, hint: t.updatesHint }),
+      field(t.updatesTime, time)),
+    h("p", { class: updates.result === "failed" ? "update-result update-failed" : "update-result", text: last }),
+    h("div", { class: "actions" }, check));
+}
 
 export function deviceView(container) {
   let status = null;
@@ -276,6 +321,7 @@ export function deviceView(container) {
       card(t.sourcesTitle, sources),
       card(t.addressesTitle, h("ul", { class: "plain-list" }, status.addresses.map((url) => h("li", { text: url }))),
         h("p", { class: "muted", text: t.version(status.version, ago(status.startedAt)) })),
+      updatesCard(status, refresh),
       card(t.passwordTitle, form));
   };
   rerender();

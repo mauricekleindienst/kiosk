@@ -42,8 +42,11 @@ def _validate(config):
             raise ConfigError(f"news.{key}.url must be an http(s) URL")
         if int(feed.get("limit", 0)) < 1:
             raise ConfigError(f"news.{key}.limit must be at least 1")
-    if float(config["weather"]["refreshMinutes"]) < 1 or float(config["news"]["refreshMinutes"]) < 1:
-        raise ConfigError("refreshMinutes must be at least 1")
+    for section in ("weather", "news", "stock", "transit"):
+        if float(config[section]["refreshMinutes"]) < 1:
+            raise ConfigError(f"{section}.refreshMinutes must be at least 1")
+        if not str(config[section].get("baseUrl", "https://")).startswith(("http://", "https://")):
+            raise ConfigError(f"{section}.baseUrl must be an http(s) URL")
     admin_port = config.get("adminPort")
     if admin_port is not None and not (isinstance(admin_port, int) and 0 <= admin_port <= 65535):
         raise ConfigError("adminPort must be a port number, or null to switch the admin interface off")

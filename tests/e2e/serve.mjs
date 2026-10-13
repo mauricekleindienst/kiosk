@@ -115,6 +115,57 @@ function rss(key, now) {
   return `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>Test</title>${items}</channel></rss>`;
 }
 
+// A trading day from 9:00 to 17:30 Berlin time with a gentle upward drift, up to now.
+function chart(now) {
+  const open = berlinMidnight(now).getTime() + 9 * 3600_000;
+  const close = open + 8.5 * 3600_000;
+  const timestamp = [];
+  const values = [];
+  for (let t = open; t <= Math.min(now.getTime(), close); t += 300_000) {
+    timestamp.push(Math.floor(t / 1000));
+    values.push(Math.round((1830 + (t - open) / 600_000 + 6 * Math.sin((t - open) / 1_800_000)) * 100) / 100);
+  }
+  if (!values.length) {
+    timestamp.push(Math.floor(open / 1000));
+    values.push(1830);
+  }
+  return {
+    chart: {
+      result: [{
+        meta: {
+          currency: "EUR", symbol: "RHM.DE", fullExchangeName: "XETRA", longName: "Rheinmetall AG",
+          regularMarketPrice: values.at(-1), chartPreviousClose: 1825.5, regularMarketTime: timestamp.at(-1),
+          currentTradingPeriod: { regular: { start: Math.floor(open / 1000), end: Math.floor(close / 1000) } },
+        },
+        timestamp,
+        indicators: { quote: [{ close: values }] },
+      }],
+      error: null,
+    },
+  };
+}
+
+const STOPS = [
+  { type: "stop", id: "706070", name: "Kassel Rathaus" },
+  { type: "station", id: "8000193", name: "Kassel Hbf" },
+  { type: "stop", id: "706123", name: "Kassel Am Stern" },
+];
+
+function departures(now) {
+  const at = (minutes) => new Date(now.getTime() + minutes * 60_000).toISOString();
+  const line = (name, product) => ({ name, product });
+  return {
+    departures: [
+      { when: at(2), plannedWhen: at(2), delay: 0, direction: "Wilhelmshöhe", line: line("1", "tram") },
+      { when: at(6), plannedWhen: at(4), delay: 120, direction: "Kaufungen Papierfabrik", line: line("4", "tram") },
+      { when: null, plannedWhen: at(9), delay: null, cancelled: true, direction: "Melsungen", line: line("RT5", "tram") },
+      { when: at(15), plannedWhen: at(9), delay: 360, direction: "Kassel Brückenhof", line: line("16", "bus") },
+      { when: at(18), plannedWhen: at(18), delay: 0, direction: "Ihringshäuser Straße", line: line("3", "tram") },
+      { when: at(26), plannedWhen: at(26), delay: 0, direction: "Siegen Hbf", platform: "4", line: line("RE98", "regionalExpress") },
+    ],
+  };
+}
+
 const upstream = createServer((request, response) => {
   const url = new URL(request.url, "http://localhost");
   const now = new Date();
@@ -125,6 +176,9 @@ const upstream = createServer((request, response) => {
   if (url.pathname === "/current_weather") return json(current(now));
   if (url.pathname === "/weather") return json(forecast(now));
   if (url.pathname === "/alerts") return json(alerts(now));
+  if (url.pathname.startsWith("/v8/finance/chart/")) return json(chart(now));
+  if (url.pathname === "/locations") return json(STOPS.filter((stop) => stop.name.toLowerCase().includes((url.searchParams.get("query") ?? "").toLowerCase().split(" ")[0])));
+  if (/^\/stops\/[^/]+\/departures$/.test(url.pathname)) return json(departures(now));
   if (url.pathname.startsWith("/rss/")) {
     response.writeHead(200, { "Content-Type": "application/rss+xml; charset=utf-8" });
     return response.end(rss(url.pathname.slice(5), now));
@@ -141,15 +195,20 @@ upstream.listen(0, "127.0.0.1", () => {
     adminHost: "127.0.0.1",
     adminPort: ADMIN_PORT,
     weather: { baseUrl: base },
+    stock: { baseUrl: base },
+    transit: { baseUrl: base },
     news: { main: { url: `${base}/rss/main` }, side: { url: `${base}/rss/side` } },
   }));
+  // Update checks in e2e run a stand-in that reports "already current".
+  const updateScript = join(dir, "update.sh");
+  writeFileSync(updateScript, "#!/usr/bin/env bash\necho already current\nexit 10\n", { mode: 0o755 });
   const kiosk = spawn("python3", [
     "-m", "kiosk", "--config", configPath, "--cache-dir", join(dir, "cache"),
     "--state-dir", join(dir, "state"), "--data-dir", join(dir, "data"),
   ], {
     cwd: join(ROOT, "server"),
     stdio: "inherit",
-    env: { ...process.env, NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost" },
+    env: { ...process.env, NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost", KIOSK_UPDATE_SCRIPT: updateScript },
   });
   const stop = () => {
     kiosk.kill("SIGTERM");

@@ -1,0 +1,198 @@
+{
+ "departures": [
+  {
+   "tripId": "1|Tram 1|5",
+   "stop": {
+    "type": "stop",
+    "id": "8000193",
+    "name": "Kassel Hauptbahnhof"
+   },
+   "when": "2026-10-13T09:48:00+02:00",
+   "plannedWhen": "2026-10-13T09:46:00+02:00",
+   "delay": 120,
+   "platform": null,
+   "plannedPlatform": null,
+   "prognosisType": "prognosed",
+   "direction": "Wilhelmshöhe",
+   "line": {
+    "type": "line",
+    "id": "tram-1",
+    "fahrtNr": "123",
+    "name": "Tram 1",
+    "public": true,
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "remarks": [],
+   "origin": null,
+   "destination": {
+    "type": "stop",
+    "id": "1",
+    "name": "Wilhelmshöhe"
+   }
+  },
+  {
+   "tripId": "1|Bus 16|2",
+   "stop": {
+    "type": "stop",
+    "id": "8000193",
+    "name": "Kassel Hauptbahnhof"
+   },
+   "when": "2026-10-13T09:43:00+02:00",
+   "plannedWhen": "2026-10-13T09:43:00+02:00",
+   "delay": 0,
+   "platform": null,
+   "plannedPlatform": null,
+   "prognosisType": "prognosed",
+   "direction": "Kassel Brückenhof",
+   "line": {
+    "type": "line",
+    "id": "bus-16",
+    "fahrtNr": "123",
+    "name": "Bus 16",
+    "public": true,
+    "productName": "Bus",
+    "mode": "bus",
+    "product": "bus"
+   },
+   "remarks": [],
+   "origin": null,
+   "destination": {
+    "type": "stop",
+    "id": "1",
+    "name": "Kassel Brückenhof"
+   }
+  },
+  {
+   "tripId": "1|RT 5|9",
+   "stop": {
+    "type": "stop",
+    "id": "8000193",
+    "name": "Kassel Hauptbahnhof"
+   },
+   "when": null,
+   "plannedWhen": "2026-10-13T09:50:00+02:00",
+   "delay": null,
+   "platform": "2",
+   "plannedPlatform": "2",
+   "prognosisType": "prognosed",
+   "direction": "Melsungen",
+   "line": {
+    "type": "line",
+    "id": "rt-5",
+    "fahrtNr": "123",
+    "name": "RT 5",
+    "public": true,
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "remarks": [],
+   "origin": null,
+   "destination": {
+    "type": "stop",
+    "id": "1",
+    "name": "Melsungen"
+   },
+   "cancelled": true
+  },
+  {
+   "tripId": "1|RE 9|14",
+   "stop": {
+    "type": "stop",
+    "id": "8000193",
+    "name": "Kassel Hauptbahnhof"
+   },
+   "when": "2026-10-13T10:01:00+02:00",
+   "plannedWhen": "2026-10-13T09:55:00+02:00",
+   "delay": 360,
+   "platform": "4",
+   "plannedPlatform": "4",
+   "prognosisType": "prognosed",
+   "direction": "Siegen Hbf",
+   "line": {
+    "type": "line",
+    "id": "re-9",
+    "fahrtNr": "123",
+    "name": "RE 9",
+    "public": true,
+    "productName": "Regionalexpress",
+    "mode": "train",
+    "product": "regionalExpress"
+   },
+   "remarks": [],
+   "origin": null,
+   "destination": {
+    "type": "stop",
+    "id": "1",
+    "name": "Siegen Hbf"
+   }
+  },
+  {
+   "tripId": "1|Tram 3|-10",
+   "stop": {
+    "type": "stop",
+    "id": "8000193",
+    "name": "Kassel Hauptbahnhof"
+   },
+   "when": "2026-10-13T09:31:00+02:00",
+   "plannedWhen": "2026-10-13T09:31:00+02:00",
+   "delay": 0,
+   "platform": null,
+   "plannedPlatform": null,
+   "prognosisType": "prognosed",
+   "direction": "Ihringshäuser Straße",
+   "line": {
+    "type": "line",
+    "id": "tram-3",
+    "fahrtNr": "123",
+    "name": "Tram 3",
+    "public": true,
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "remarks": [],
+   "origin": null,
+   "destination": {
+    "type": "stop",
+    "id": "1",
+    "name": "Ihringshäuser Straße"
+   }
+  },
+  {
+   "tripId": "1|Tram 4|22",
+   "stop": {
+    "type": "stop",
+    "id": "8000193",
+    "name": "Kassel Hauptbahnhof"
+   },
+   "when": "2026-10-13T10:03:00+02:00",
+   "plannedWhen": "2026-10-13T10:03:00+02:00",
+   "delay": 0,
+   "platform": null,
+   "plannedPlatform": null,
+   "prognosisType": "prognosed",
+   "direction": "Kaufungen Papierfabrik",
+   "line": {
+    "type": "line",
+    "id": "tram-4",
+    "fahrtNr": "123",
+    "name": "Tram 4",
+    "public": true,
+    "productName": "Tram",
+    "mode": "train",
+    "product": "tram"
+   },
+   "remarks": [],
+   "origin": null,
+   "destination": {
+    "type": "stop",
+    "id": "1",
+    "name": "Kaufungen Papierfabrik"
+   }
+  }
+ ],
+ "realtimeDataUpdatedAt": 1760341260
+}

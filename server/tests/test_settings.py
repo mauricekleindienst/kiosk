@@ -106,6 +106,33 @@ class ValidateTest(unittest.TestCase):
                   "options": {"images": ["0123456789abcdef0123.png"] * 2}}
         self.assertInvalid(with_widget(slides), "widgets.4.options.images", "einmal", {"0123456789abcdef0123.png"})
 
+    def test_stop_and_products(self):
+        transit = {"id": "t", "type": "transit", "x": 7, "y": 0, "w": 3, "h": 2, "options": {}}
+        normalized = validate(with_widget(transit), CATALOG, set())["widgets"][-1]["options"]
+        self.assertIsNone(normalized["stop"], "a new tile may wait for its stop")
+        self.assertIn("tram", normalized["products"])
+        transit["options"] = {"stop": {"id": "8000193"}}
+        self.assertInvalid(with_widget(transit), "widgets.4.options.stop", "Haltestelle")
+        transit["options"] = {"stop": {"id": "8000193", "name": ""}}
+        self.assertInvalid(with_widget(transit), "widgets.4.options.stop.name")
+        transit["options"] = {"products": []}
+        self.assertInvalid(with_widget(transit), "widgets.4.options.products", "mindestens ein")
+        transit["options"] = {"products": ["tram", "rocket"]}
+        self.assertInvalid(with_widget(transit), "widgets.4.options.products")
+        transit["options"] = {"products": ["bus", "tram", "bus"]}
+        self.assertEqual(validate(with_widget(transit), CATALOG, set())["widgets"][-1]["options"]["products"], ["tram", "bus"],
+                         "catalog order, no duplicates")
+
+    def test_night_and_update_settings(self):
+        self.assertEqual(DEFAULTS["display"]["sleep"]["powerOff"], True)
+        self.assertEqual(DEFAULTS["updates"], {"enabled": True, "time": "03:15"})
+        settings = copy.deepcopy(DEFAULTS)
+        settings["display"]["sleep"]["cec"] = "ja"
+        self.assertInvalid(settings, "display.sleep.cec")
+        settings = copy.deepcopy(DEFAULTS)
+        settings["updates"]["time"] = "3 Uhr"
+        self.assertInvalid(settings, "updates.time")
+
     def test_global_settings(self):
         def global_(**changes):
             settings = copy.deepcopy(DEFAULTS)

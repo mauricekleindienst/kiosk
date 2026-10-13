@@ -8,7 +8,8 @@ jedes Gerät im Firmennetz im Browser öffnen kann (Computer, Tablet, Handy).
 Hessen), Wetter vom Deutschen Wetterdienst (amtliche Warnungen, Stunden- und 7-Tage-Vorschau),
 Nachrichten aus beliebig vielen RSS-Feeds (Standard: Rheinmetall und Kassel), Firmenlogo,
 Mitteilung (etwa eine Begrüßung für Besuch), Countdown, Weltzeit, Monatskalender, Bilder im
-Wechsel und „Tage seit“ (etwa ohne Arbeitsunfall).
+Wechsel, „Tage seit“ (etwa ohne Arbeitsunfall), **Aktie** (Kurs, Veränderung, Tageskurve) und
+**Abfahrten** an einer Haltestelle (live mit Verspätungen und Ausfällen, auch KVG und NVV).
 
 Auf dem Pi läuft nur, was Raspberry Pi OS ohnehin mitbringt: Python 3 und Chromium. Kein Node,
 kein pip, keine API-Schlüssel.
@@ -73,14 +74,32 @@ kiosk`; danach zeigt der Bildschirm einen neuen Code.
 **Verwaltung abschalten:** in `~/.config/kiosk/config.json` `{"adminPort": null}` eintragen und
 den Dienst neu starten.
 
-## Aktualisieren
+## Nachtmodus
+
+Unter „Einstellungen“ → „Bildschirm“: zum Beispiel 19–7 Uhr und am Wochenende aus. Standardmäßig
+schaltet der Pi dann das Bildsignal ab (`wlr-randr` unter Wayland, DPMS unter X11), der Monitor
+geht in Standby und spart Strom. Für Fernseher gibt es zusätzlich HDMI-CEC (Paket `v4l-utils`,
+`sudo apt install v4l-utils`). Um 7 Uhr geht alles wieder an.
+
+## Automatische Updates
+
+Der Kiosk holt sich nachts (Standard 3:15 Uhr, einstellbar unter „Gerät“) die neueste Version aus
+GitHub: nur als Fast-Forward, nie über lokale Änderungen, und mit Selbsttest. Besteht die neue
+Version ihn nicht, bleibt die alte. Nach einem Update startet der Dienst neu und der Bildschirm lädt
+die neuen Dateien. Unter „Gerät“ stehen das Ergebnis der letzten Prüfung und „Jetzt nach Updates
+suchen“.
+
+Dafür braucht der Pi Lesezugriff auf das Repository. Bei einem privaten Repository geht das mit
+einem **Deploy Key**; der grafische Installer richtet ihn ein. Von Hand:
 
 ```bash
-cd ~/kiosk && git pull && systemctl --user restart kiosk
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/kiosk_deploy -C "kiosk@$(hostname)"
+cat ~/.ssh/kiosk_deploy.pub    # auf GitHub: Repository → Settings → Deploy keys → Add deploy key (nur lesen)
+printf 'Host github-kiosk\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/kiosk_deploy\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+cd ~/kiosk && git remote set-url origin git@github-kiosk:mauricekleindienst/kiosk.git
 ```
 
-Danach in der Verwaltung unter „Gerät“ auf „Bildschirm neu laden“, oder bis zum nächtlichen
-Neuladen warten.
+Von Hand aktualisieren: `cd ~/kiosk && ./scripts/update.sh && systemctl --user restart kiosk`.
 
 ## Datei-Einstellungen (optional)
 
@@ -106,6 +125,12 @@ Ist die Datei fehlerhaft, startet der Dienst nicht und sagt im Log, welcher Wert
   erlaubt, Quellenangabe steht auf dem Bildschirm.
 - **Nachrichten:** RSS-Feeds der Google-News-Suche (Standard: „Rheinmetall“ und „Kassel“). Jeder
   andere RSS- oder Atom-Feed geht ebenfalls; die Adresse trägst du in der Nachrichten-Kachel ein.
+- **Aktie:** Yahoo Finance (ohne Schlüssel, etwa 15 Minuten verzögert). Die Schnittstelle ist
+  inoffiziell: Sie kann sich ändern oder Anfragen ablehnen, und ihre Nutzungsbedingungen erlauben
+  keine kommerzielle Nutzung. Für den dauerhaften Einsatz im Unternehmen besser einen lizenzierten
+  Anbieter wählen; die Quelle ist dafür austauschbar (`server/kiosk/stock.py`).
+- **Abfahrten:** `v6.db.transport.rest`, die offene Schnittstelle zum Fahrplan der Deutschen Bahn
+  (enthält Tram und Bus von KVG und NVV). Kostenlos, ohne Schlüssel, ohne Garantie.
 - **Feiertage, Sonnenauf- und -untergang:** werden lokal berechnet.
 
 Fällt eine Quelle aus, bleibt der letzte Stand stehen und die Kachel zeigt dezent

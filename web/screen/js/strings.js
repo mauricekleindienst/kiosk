@@ -32,6 +32,20 @@ export const strings = {
 
   stale: (time) => `Keine Verbindung – Stand ${time} Uhr`,
 
+  stockLoading: "Kurs wird geladen…",
+  stockUnavailable: "Der Kurs ist gerade nicht verfügbar.",
+  stockAsOf: (time) => `Stand ${time} Uhr, verzögert`,
+
+  transitTitle: "Abfahrten",
+  transitNoStop: "Noch keine Haltestelle gewählt. Das geht in der Verwaltung bei dieser Kachel.",
+  transitLoading: "Abfahrten werden geladen…",
+  transitUnavailable: "Die Fahrplanauskunft ist gerade nicht erreichbar.",
+  transitNone: "In der nächsten Zeit keine Abfahrten.",
+  transitIn: (minutes) => `${minutes}\u00a0Min.`,
+  transitNow: "jetzt",
+  transitCancelled: "fällt aus",
+  transitPlatform: (platform) => `Gleis ${platform}`,
+
   countdownDays: (days) => (days === 1 ? "Tag" : "Tage"),
   countdownUntil: (label) => `bis ${label}`,
   countdownTomorrow: (label) => `Morgen: ${label}`,

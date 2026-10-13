@@ -120,6 +120,7 @@ const TEXT_PAIRS = [
   ["--warning", "--warning-soft"],
   ["--danger", "--danger-soft"],
   ["--success", "--success-soft"],
+  ["--success", "--surface"],
   ["--danger", "--surface"],
   ["--icon-rain", "--surface"],
   ["--icon-rain", "--surface-sunken"],

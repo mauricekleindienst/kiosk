@@ -621,6 +621,70 @@ textarea.input {
   grid-column: 1 / -1;
 }
 
+.stop-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stop-current {
+  font-weight: var(--weight-semibold);
+}
+
+.stop-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stop-result {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stop-result:hover {
+  background: var(--bg-hover);
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px 12px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--button-bg);
+}
+
+.update-result {
+  color: var(--text-muted);
+}
+
+.update-failed {
+  color: var(--danger);
+}
+
 /* Media */
 
 .dropzone {

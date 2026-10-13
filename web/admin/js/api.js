@@ -60,5 +60,7 @@ export const api = {
   refresh: () => request("POST", "/api/admin/actions/refresh", {}),
   reloadScreen: () => request("POST", "/api/admin/actions/reload-screen", {}),
   changePassword: (current, next) => request("POST", "/api/admin/password", { current, new: next }),
+  searchStops: (text) => request("GET", `/api/admin/transit/stops?query=${encodeURIComponent(text)}`),
+  checkUpdates: () => request("POST", "/api/admin/updates/check", {}),
   catalog: async () => (await fetch("/shared/widgets.json", { cache: "no-store" })).json(),
 };

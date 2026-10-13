@@ -1,6 +1,7 @@
 // Builds the settings form of a widget from its options in the catalog (shared/widgets.json).
 // Changes apply right away: toggles and lists at once, typed text after a short pause.
 
+import { api } from "./api.js";
 import { button, field, h, uid } from "./ui.js";
 import { t } from "./strings.js";
 
@@ -117,6 +118,70 @@ function zonesControl(spec, value, commit) {
   return wrapper;
 }
 
+function stopControl(spec, value, commit) {
+  const wrapper = h("div", { class: "stop-picker" });
+  const current = h("p", { class: value ? "stop-current" : "field-hint", text: value ? value.name : t.noStopYet });
+  const input = h("input", { class: "input", type: "search", placeholder: t.stopSearchPlaceholder, autocomplete: "off", "aria-label": t.stopSearch });
+  const results = h("ul", { class: "stop-results", role: "listbox", "aria-label": t.stopResults });
+  const message = h("p", { class: "field-hint", role: "status" });
+  let counter = 0;
+  const search = async () => {
+    const text = input.value.trim();
+    results.replaceChildren();
+    if (text.length < 2) {
+      message.textContent = "";
+      return;
+    }
+    const mine = (counter += 1);
+    message.textContent = t.stopSearching;
+    try {
+      const { stops } = await api.searchStops(text);
+      // A slower, older answer must not replace a newer one.
+      if (mine !== counter) return;
+      message.textContent = stops.length ? "" : t.stopNothingFound;
+      for (const stop of stops) {
+        results.append(h("li", {}, button(stop.name, () => {
+          commit({ id: stop.id, name: stop.name });
+          current.className = "stop-current";
+          current.textContent = stop.name;
+          results.replaceChildren();
+          input.value = "";
+        }, { class: "stop-result" })));
+      }
+    } catch (error) {
+      if (mine === counter) message.textContent = error.message;
+    }
+  };
+  const later = debounced(search);
+  input.addEventListener("input", () => later());
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      later.flush();
+    }
+  });
+  wrapper.append(current, input, message, results);
+  return wrapper;
+}
+
+function productsControl(spec, value, commit) {
+  const chosen = new Set(value);
+  const group = h("div", { class: "check-grid", role: "group" });
+  for (const choice of spec.choices) {
+    const box = h("input", {
+      type: "checkbox",
+      checked: chosen.has(choice.value),
+      onChange: () => {
+        if (box.checked) chosen.add(choice.value);
+        else chosen.delete(choice.value);
+        commit(spec.choices.map((item) => item.value).filter((item) => chosen.has(item)));
+      },
+    });
+    group.append(h("label", { class: "check" }, box, h("span", { text: choice.label })));
+  }
+  return group;
+}
+
 /** The form for one widget. `onChange(key, value)` saves; `errors` maps option keys to messages. */
 export function widgetForm(kind, widget, { onChange, uploads, errors = {} }) {
   const form = h("div", { class: "form" });
@@ -158,6 +223,14 @@ export function widgetForm(kind, widget, { onChange, uploads, errors = {} }) {
         break;
       case "images":
         form.append(h("fieldset", { class: "fieldset" }, h("legend", { class: "field-label", text: spec.label }), imagesControl(spec, value, commit, uploads)));
+        continue;
+      case "stop":
+        form.append(h("fieldset", { class: "fieldset" }, h("legend", { class: "field-label", text: spec.label }), stopControl(spec, value, commit),
+          errors[spec.key] ? h("p", { class: "field-error", role: "alert", text: errors[spec.key] }) : null));
+        continue;
+      case "products":
+        form.append(h("fieldset", { class: "fieldset" }, h("legend", { class: "field-label", text: spec.label }), productsControl(spec, value, commit),
+          errors[spec.key] ? h("p", { class: "field-error", role: "alert", text: errors[spec.key] }) : null));
         continue;
       case "zones":
         form.append(h("fieldset", { class: "fieldset" }, h("legend", { class: "field-label", text: spec.label }), zonesControl(spec, value, commit)));

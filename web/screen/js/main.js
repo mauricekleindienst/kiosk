@@ -3,6 +3,7 @@
 
 import { el } from "../../shared/js/dom.js";
 import { zonedParts } from "../../shared/js/format.js";
+import { isSleeping } from "../../shared/js/schedule.js";
 import { strings } from "./strings.js";
 import { WIDGETS } from "./widgets/index.js";
 
@@ -76,18 +77,7 @@ function renderData(now) {
 }
 
 function sleeping(now) {
-  const sleep = state?.settings?.display?.sleep;
-  if (!sleep?.enabled) return false;
-  const parts = zonedParts(now, timeZone());
-  const weekday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
-  if (sleep.weekends && (weekday === 0 || weekday === 6)) return true;
-  const minutes = parts.hour * 60 + parts.minute;
-  const [fromH, fromM] = sleep.from.split(":").map(Number);
-  const [toH, toM] = sleep.to.split(":").map(Number);
-  const from = fromH * 60 + fromM;
-  const to = toH * 60 + toM;
-  // A window like 19:00-07:00 crosses midnight.
-  return from <= to ? minutes >= from && minutes < to : minutes >= from || minutes < to;
+  return isSleeping(state?.settings?.display?.sleep, zonedParts(now, timeZone()));
 }
 
 function renderOverlay(now) {
@@ -162,7 +152,8 @@ async function pollRevision() {
   }
   const previous = revision;
   revision = next;
-  if (previous && next.reload !== previous.reload) {
+  // An admin's reload request, or a new server build after an update: load the new files.
+  if (previous && (next.reload !== previous.reload || next.build !== previous.build)) {
     location.reload();
     return;
   }

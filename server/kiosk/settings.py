@@ -20,6 +20,8 @@ CATALOG_PATH = Path(__file__).resolve().parents[2] / "web" / "shared" / "widgets
 SETTINGS_VERSION = 1
 _ID = re.compile(r"^[a-z0-9-]{1,32}$")
 _TIME = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+# Stop ids differ between timetable backends (numbers, or "A=1@O=...@" strings); the URL quotes them.
+_STOP_ID = re.compile(r"^[^\x00-\x1f]{1,200}$")
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 SCALE_RANGE = (80, 140)
 DENSITIES = ("compact", "normal", "airy")
@@ -118,6 +120,18 @@ def _option(spec, value, path, upload_ids):
         for index, item in enumerate(value):
             _require(upload_ids is None or item in upload_ids, "Ein gewähltes Bild gibt es nicht mehr.", f"{path}.{index}")
         return list(value)
+    if kind == "stop":
+        if value is None:
+            _require(not required, "Bitte eine Haltestelle suchen und wählen.", path)
+            return None
+        _require(isinstance(value, dict) and set(value) == {"id", "name"}, "Bitte eine Haltestelle wählen.", path)
+        _require(isinstance(value["id"], str) and _STOP_ID.match(value["id"]), "Ungültige Haltestelle.", f"{path}.id")
+        return {"id": value["id"], "name": _text(value["name"], f"{path}.name", 120, required=True)}
+    if kind == "products":
+        allowed = [choice["value"] for choice in spec["choices"]]
+        _require(isinstance(value, list) and value and all(item in allowed for item in value),
+                 "Bitte mindestens ein Verkehrsmittel wählen.", path)
+        return [item for item in allowed if item in value]
     if kind == "zones":
         _require(isinstance(value, list), "Bitte Standorte angeben.", path)
         _require(len(value) <= spec.get("maxItems", 6), f"Höchstens {spec.get('maxItems', 6)} Standorte.", path)
@@ -166,7 +180,7 @@ def validate(raw, catalog, upload_ids=None):
     """Returns a normalized copy of `raw` (defaults filled in) or raises SettingsError.
     `upload_ids` is the set of existing uploads; None skips that check (used for defaults)."""
     _require(isinstance(raw, dict), "Ungültige Einstellungen.", "")
-    known = {"version", "location", "timeZone", "appearance", "display", "logo", "widgets"}
+    known = {"version", "location", "timeZone", "appearance", "display", "updates", "logo", "widgets"}
     unknown = set(raw) - known
     _require(not unknown, f"Unbekannte Angaben: {', '.join(sorted(unknown))}.", "")
 
@@ -186,8 +200,11 @@ def validate(raw, catalog, upload_ids=None):
 
     display = raw.get("display", {})
     sleep = display.get("sleep", {})
-    _require(isinstance(sleep.get("enabled", False), bool) and isinstance(sleep.get("weekends", False), bool),
-             "Bitte ein- oder ausschalten.", "display.sleep")
+    for key in ("enabled", "weekends", "powerOff", "cec"):
+        _require(isinstance(sleep.get(key, False), bool), "Bitte ein- oder ausschalten.", f"display.sleep.{key}")
+    updates = raw.get("updates", {})
+    _require(isinstance(updates, dict) and isinstance(updates.get("enabled", True), bool),
+             "Bitte ein- oder ausschalten.", "updates.enabled")
 
     logo = raw.get("logo")
     _require(logo is None or upload_ids is None or logo in upload_ids, "Das Logo gibt es nicht mehr.", "logo")
@@ -221,7 +238,15 @@ def validate(raw, catalog, upload_ids=None):
                 "from": _time(sleep.get("from", "19:00"), "display.sleep.from"),
                 "to": _time(sleep.get("to", "07:00"), "display.sleep.to"),
                 "weekends": sleep.get("weekends", False),
+                # Switch the monitor's signal off instead of only showing black.
+                "powerOff": sleep.get("powerOff", True),
+                # Also send TVs to standby over HDMI-CEC (only TVs listen to it).
+                "cec": sleep.get("cec", False),
             },
+        },
+        "updates": {
+            "enabled": updates.get("enabled", True),
+            "time": _time(updates.get("time", "03:15"), "updates.time"),
         },
         "logo": logo,
         "widgets": normalized_widgets,

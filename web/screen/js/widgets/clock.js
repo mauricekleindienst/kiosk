@@ -68,6 +68,23 @@ export function create(tile, widget, ctx) {
     box.append(logo);
   }
 
+  // Small tiles drop the extra lines rather than cut them: first the week line, then the date.
+  const fit = () => {
+    metaNode.hidden = false;
+    dateNode.hidden = false;
+    // Cut means: the date lines reach past the box (rounding in the big clock text does not count).
+    const overflowing = () => {
+      const limit = box.getBoundingClientRect();
+      return [dateNode, metaNode].some((node) => {
+        if (node.hidden || !node.isConnected) return false;
+        const rect = node.getBoundingClientRect();
+        return rect.bottom > limit.bottom + 1 || rect.right > limit.right + 1;
+      });
+    };
+    if (overflowing()) metaNode.hidden = true;
+    if (overflowing()) dateNode.hidden = true;
+  };
+
   let lastDay = "";
   return {
     tick(now) {
@@ -89,8 +106,9 @@ export function create(tile, widget, ctx) {
         dateNode.textContent = formatLongDate(now, ctx.timeZone);
         const meta = [options.showWeek ? strings.calendarWeek(isoWeek(today)) : null, options.showHoliday ? holidayText(today) : null];
         metaNode.textContent = meta.filter(Boolean).join(" · ");
+        fit();
       }
     },
-    render() {},
+    render: fit,
   };
 }

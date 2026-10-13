@@ -27,6 +27,14 @@
       "limit": 2
     }
   },
+  "stock": {
+    "baseUrl": "https://query1.finance.yahoo.com",
+    "refreshMinutes": 5
+  },
+  "transit": {
+    "baseUrl": "https://v6.db.transport.rest",
+    "refreshMinutes": 1
+  },
   "display": {
     "reloadAt": "03:30"
   }

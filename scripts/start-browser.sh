@@ -21,6 +21,9 @@ until curl -sf --max-time 2 "${URL}api/health" >/dev/null; do
   sleep 2
 done
 
+# The monitor follows the night schedule; the helper keeps its own lock, so it runs once.
+"$ROOT/scripts/display-power.sh" &
+
 mkdir -p "$PROFILE"
 # Several autostart mechanisms may start this script (XDG, labwc, wayfire); only one may run.
 exec 9>"$PROFILE.lock"

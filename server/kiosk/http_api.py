@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from .auth import SESSION_MAX_SECONDS, AuthError
+from .http_client import FetchError
 from .settings import ConflictError, SettingsError
 from .uploads import UploadError, is_upload_id
 
@@ -185,6 +186,9 @@ class BaseHandler(BaseHTTPRequestHandler):
             self.send_json(self.kiosk.revision())
         elif path == "/api/health":
             self.send_json({"ok": True})
+        elif path == "/api/display" and local:
+            self.require_get()
+            self.send_json(self.kiosk.display())
         elif path.startswith("/uploads/"):
             self.require_get()
             self.send_upload(path[len("/uploads/"):])
@@ -242,7 +246,7 @@ class AdminHandler(BaseHandler):
         if path.startswith("/api/admin/"):
             if self.command not in ("GET", "HEAD"):
                 self._require_same_origin()
-            self.admin_api(path[len("/api/admin/"):])
+            self.admin_api(path[len("/api/admin/"):], query)
             return
         if path.startswith("/screen/api/") or path.startswith("/uploads/"):
             self._require_login()
@@ -267,7 +271,7 @@ class AdminHandler(BaseHandler):
         else:
             self.send_static(WEB_DIR / "admin", path if path != "/" else "index.html")
 
-    def admin_api(self, name):
+    def admin_api(self, name, query):
         kiosk = self.kiosk
         address = self.client_address[0]
         method = self.command
@@ -331,6 +335,20 @@ class AdminHandler(BaseHandler):
         elif name == "actions/refresh" and method == "POST":
             kiosk.refresh_now()
             self.send_json({"ok": True})
+        elif name == "transit/stops" and method == "GET":
+            text = (query.get("query") or [""])[0].strip()
+            if len(text) < 2:
+                raise ApiError(HTTPStatus.BAD_REQUEST, "Bitte mindestens zwei Buchstaben eingeben.")
+            try:
+                stops = kiosk.search_stops(text[:80])
+            except (FetchError, ValueError, KeyError, TypeError, AttributeError) as err:
+                log.warning("Stop search for %r failed: %s", text, err)
+                raise ApiError(HTTPStatus.BAD_GATEWAY, "Die Fahrplanauskunft ist gerade nicht erreichbar. Bitte später erneut versuchen.") from err
+            self.send_json({"stops": stops})
+        elif name == "updates/check" and method == "POST":
+            if not kiosk.updater or not kiosk.updater.start():
+                raise ApiError(HTTPStatus.CONFLICT, "Es läuft bereits eine Prüfung.")
+            self.send_json({"ok": True}, HTTPStatus.ACCEPTED)
         elif name == "actions/reload-screen" and method == "POST":
             kiosk.reload_screen()
             self.send_json({"ok": True})

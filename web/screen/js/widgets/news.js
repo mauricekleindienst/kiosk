@@ -14,7 +14,7 @@ export function create(tile, widget, ctx) {
 
   return {
     render(state, now, reachable) {
-      const source = state?.news?.[widget.id];
+      const source = state?.widgets?.[widget.id];
       renderStatus(status, source, now, reachable, ctx.timeZone);
       clear(body);
       const items = source?.data;
