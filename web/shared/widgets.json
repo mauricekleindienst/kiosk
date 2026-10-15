@@ -468,6 +468,52 @@
         }
       ]
     },
+    "gif": {
+      "label": "GIF",
+      "description": "Ein hochgeladenes GIF, das auf dem Bildschirm läuft, etwa eine Animation oder ein kurzer Clip.",
+      "size": {
+        "w": 3,
+        "h": 3
+      },
+      "minSize": {
+        "w": 1,
+        "h": 1
+      },
+      "options": [
+        {
+          "key": "image",
+          "label": "GIF",
+          "type": "image",
+          "accept": [
+            "gif"
+          ],
+          "default": null,
+          "help": "GIFs lädst du unter „Logo und Bilder“ hoch."
+        },
+        {
+          "key": "fit",
+          "label": "Bildausschnitt",
+          "type": "select",
+          "default": "contain",
+          "choices": [
+            {
+              "value": "contain",
+              "label": "Ganzes Bild"
+            },
+            {
+              "value": "cover",
+              "label": "Kachel füllen"
+            }
+          ]
+        },
+        {
+          "key": "panel",
+          "label": "Auf weißer Kachel",
+          "type": "boolean",
+          "default": true
+        }
+      ]
+    },
     "counter": {
       "label": "Tage seit",
       "description": "Zählt die Tage seit einem Datum, etwa „Tage ohne Arbeitsunfall“.",

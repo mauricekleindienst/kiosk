@@ -102,6 +102,12 @@ class ValidateTest(unittest.TestCase):
         self.assertInvalid(with_widget(logo), "widgets.4.options.image", "gibt es nicht mehr")
         validate(with_widget(logo), CATALOG, {"0123456789abcdef0123.png"})
 
+        gif = {"id": "g", "type": "gif", "x": 7, "y": 0, "w": 1, "h": 1, "options": {"image": "0123456789abcdef0123.png"}}
+        self.assertInvalid(with_widget(gif), "widgets.4.options.image", "Format GIF", {"0123456789abcdef0123.png"})
+        gif["options"]["image"] = "0123456789abcdef0123.gif"
+        options = validate(with_widget(gif), CATALOG, {"0123456789abcdef0123.gif"})["widgets"][-1]["options"]
+        self.assertEqual(options, {"image": "0123456789abcdef0123.gif", "fit": "contain", "panel": True})
+
         slides = {"id": "s", "type": "slideshow", "x": 7, "y": 0, "w": 2, "h": 2,
                   "options": {"images": ["0123456789abcdef0123.png"] * 2}}
         self.assertInvalid(with_widget(slides), "widgets.4.options.images", "einmal", {"0123456789abcdef0123.png"})

@@ -13,7 +13,7 @@ from .fsutil import atomic_write_bytes, atomic_write_json
 
 log = logging.getLogger("kiosk")
 
-MAX_BYTES = 8 * 1024 * 1024
+MAX_BYTES = 20 * 1024 * 1024  # animated GIFs are often larger than photos
 MAX_FILES = 200
 _ID = re.compile(r"^[0-9a-f]{20}\.(png|jpg|webp|gif|svg)$")
 CONTENT_TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "gif": "image/gif", "svg": "image/svg+xml"}

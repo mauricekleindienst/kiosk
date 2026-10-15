@@ -53,6 +53,7 @@ export const strings = {
   counterSince: (date) => `seit ${date}`,
   noImages: "Noch keine Bilder ausgewählt. Bilder kommen in der Verwaltung unter „Logo und Bilder“ dazu.",
   noLogo: "Noch kein Logo hochgeladen.",
+  noGif: "Noch kein GIF ausgewählt. GIFs kommen in der Verwaltung unter „Logo und Bilder“ dazu.",
   dayOffset: (days) => (days === 1 ? "morgen" : days === -1 ? "gestern" : ""),
   hoursDifference: (hours) => {
     if (hours === 0) return "gleiche Zeit";

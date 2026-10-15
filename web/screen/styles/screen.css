@@ -1043,6 +1043,30 @@ body.asleep .screen {
   opacity: 1;
 }
 
+/* GIF */
+
+.tile-gif {
+  justify-content: center;
+}
+
+.gif-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.tile.gif-cover {
+  padding: 0;
+}
+
+.gif-cover .gif-image {
+  object-fit: cover;
+}
+
+.gif-cover .placeholder {
+  padding: var(--pad-panel);
+}
+
 /* Stock */
 
 .stock-body {

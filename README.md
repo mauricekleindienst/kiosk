@@ -8,8 +8,9 @@ jedes Gerät im Firmennetz im Browser öffnen kann (Computer, Tablet, Handy).
 Hessen), Wetter vom Deutschen Wetterdienst (amtliche Warnungen, Stunden- und 7-Tage-Vorschau),
 Nachrichten aus beliebig vielen RSS-Feeds (Standard: Rheinmetall und Kassel), Firmenlogo,
 Mitteilung (etwa eine Begrüßung für Besuch), Countdown, Weltzeit, Monatskalender, Bilder im
-Wechsel, „Tage seit“ (etwa ohne Arbeitsunfall), **Aktie** (Kurs, Veränderung, Tageskurve) und
-**Abfahrten** an einer Haltestelle (live mit Verspätungen und Ausfällen, auch KVG und NVV).
+Wechsel, **GIF** (läuft als Animation), „Tage seit“ (etwa ohne Arbeitsunfall), **Aktie** (Kurs,
+Veränderung, Tageskurve) und **Abfahrten** an einer Haltestelle (live mit Verspätungen und
+Ausfällen, auch KVG und NVV).
 
 Auf dem Pi läuft nur, was Raspberry Pi OS ohnehin mitbringt: Python 3 und Chromium. Kein Node,
 kein pip, keine API-Schlüssel.
@@ -68,8 +69,9 @@ Nur wer vor dem Bildschirm steht, kann die Verwaltung also einrichten.
   Umschalt+Pfeiltasten ändern die Größe, Entf entfernt. Rechts stellst du die gewählte Kachel ein.
   Neue Kacheln und fertige Vorlagen (Standard, Nachrichten im Fokus, Empfang, Werk und Produktion,
   Hochformat, Übersicht) stehen darunter. „Vorschau“ zeigt den Bildschirm, wie er gerade aussieht.
-- **Logo und Bilder:** Firmenlogo und Bilder hochladen (PNG, JPEG, WebP, GIF, SVG, bis 8 MB). Das
-  Logo erscheint als eigene Kachel (frei platzierbar und skalierbar) oder in der Uhr-Kachel.
+- **Logo und Bilder:** Firmenlogo und Bilder hochladen (PNG, JPEG, WebP, GIF, SVG, bis 20 MB). Das
+  Logo erscheint als eigene Kachel (frei platzierbar und skalierbar) oder in der Uhr-Kachel. Ein
+  GIF zeigst du mit der Kachel „GIF“: hinzufügen, rechts das GIF wählen, fertig.
 - **Einstellungen:** Standort für das Wetter (mit Ortsliste), Zeitzone, Schriftgröße, Abstände,
   Nachtabschaltung (zum Beispiel 19–7 Uhr und am Wochenende), Uhrzeit des nächtlichen Neuladens.
 - **Gerät:** ob der Bildschirm verbunden ist, Stand der Datenquellen, Daten jetzt aktualisieren,

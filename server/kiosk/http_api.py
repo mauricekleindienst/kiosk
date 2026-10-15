@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from .auth import SESSION_MAX_SECONDS, AuthError
 from .http_client import FetchError
 from .settings import ConflictError, SettingsError
-from .uploads import UploadError, is_upload_id
+from .uploads import MAX_BYTES as MAX_UPLOAD_BYTES, UploadError, is_upload_id
 
 log = logging.getLogger("kiosk")
 
@@ -314,7 +314,7 @@ class AdminHandler(BaseHandler):
         elif name == "uploads" and method == "GET":
             self.send_json({"uploads": kiosk.uploads_with_usage()})
         elif name == "uploads" and method == "POST":
-            data = self.read_body(8 * 1024 * 1024 + 1)
+            data = self.read_body(MAX_UPLOAD_BYTES + 1)
             try:
                 item = kiosk.uploads.add(data, unquote(self.headers.get("X-File-Name", "")))
             except UploadError as err:

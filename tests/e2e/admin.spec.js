@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { ADMIN, PASSWORD, PNG, SCREEN, clearUploads, collectConsole, getSettings, putSettings, signIn, upload } from "./helpers.js";
+import { ADMIN, GIF, PASSWORD, PNG, SCREEN, clearUploads, collectConsole, getSettings, putSettings, signIn, upload } from "./helpers.js";
 
 // The layout as the server starts it; every test restores it.
 let defaults = null;
@@ -129,6 +129,39 @@ test("a new message tile shows up on the screen within seconds", async ({ page, 
 
   await page.locator(".inspector").getByLabel("Farbig hinterlegen").check();
   await expect(screen.locator(".tile-message")).toHaveClass(/message-highlight/, { timeout: 10_000 });
+});
+
+test("a GIF tile offers only GIFs and plays the chosen one on the screen", async ({ page, context }) => {
+  await openAdmin(page);
+  const photo = await upload(page.request, "foto.png");
+  const animation = await upload(page.request, "jubel.gif", GIF);
+  expect(animation.id).toMatch(/\.gif$/);
+  await page.reload();
+  const screen = await context.newPage();
+  await screen.goto(SCREEN);
+  await shrinkWeather(page);
+
+  await page.getByRole("button", { name: "GIF hinzufügen" }).click();
+  await expect(screen.locator(".tile-gif .placeholder")).toBeVisible({ timeout: 10_000 });
+  const choice = page.locator(".inspector").getByLabel("GIF", { exact: true });
+  await expect(choice.locator("option")).toHaveText(["Keins gewählt", "jubel.gif"]);
+  await expect(choice.locator(`option[value="${photo.id}"]`)).toHaveCount(0);
+  await choice.selectOption(animation.id);
+
+  const image = screen.locator(".tile-gif .gif-image");
+  await expect(image).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => image.evaluate((img) => img.naturalWidth)).toBe(8);
+  // The file arrives unchanged, with both frames.
+  const served = await screen.request.get(`${SCREEN}/uploads/${animation.id}`);
+  expect(served.headers()["content-type"]).toBe("image/gif");
+  expect(Buffer.compare(await served.body(), GIF)).toBe(0);
+
+  // The server refuses another format for a GIF tile, whatever the client sends.
+  const { settings, revision } = await getSettings(page.request);
+  settings.widgets.find((widget) => widget.type === "gif").options.image = photo.id;
+  const refused = await page.request.put(`${ADMIN}/api/admin/settings`, { data: { settings, revision }, headers: { Origin: ADMIN } });
+  expect(refused.status()).toBe(422);
+  expect(await refused.text()).toContain("GIF");
 });
 
 test("departures: search a stop, pick it, the screen shows its departures", async ({ page, context }) => {

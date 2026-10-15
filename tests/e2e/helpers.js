@@ -6,6 +6,9 @@ export const PASSWORD = "e2e-passwort";
 // An 8 x 4 red PNG, small enough to inline.
 export const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAYAAACzzX7wAAAAEklEQVR4nGM4IafxHx9moL0CAOHEQaEL9VCrAAAAAElFTkSuQmCC", "base64");
 
+// An 8 x 4 GIF with two frames (blue, orange) that loops forever.
+export const GIF = Buffer.from("R0lGODlhCAAEAIEAAABmzAAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAFAAAACwAAAAACAAEAAAIDAABCBxIsKDBgwQDAgAh+QQBFAABACwAAAAACAAEAIHceAAAAAAAAAAAAAAIDAABCBxIsKDBgwQDAgA7", "base64");
+
 export function collectConsole(page) {
   const problems = [];
   page.on("console", (message) => {

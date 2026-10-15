@@ -1,4 +1,4 @@
-// The small widgets: logo, message, countdown, days-since counter, world clock, calendar, images.
+// The small widgets: logo, GIF, message, countdown, days-since counter, world clock, calendar, images.
 
 import { el } from "../../../shared/js/dom.js";
 import { daysBetween, formatClock, isoDay, isoWeek, zonedParts } from "../../../shared/js/format.js";
@@ -34,6 +34,25 @@ export const logo = {
       tile.append(img);
     } else {
       tile.append(el("p", "placeholder", strings.noLogo));
+    }
+    return { render() {} };
+  },
+};
+
+export const gif = {
+  create(tile, widget, ctx) {
+    const options = widget.options;
+    tile.classList.add(`gif-${options.fit}`);
+    tile.classList.toggle("tile-bare", !options.panel);
+    if (options.image) {
+      // An <img> plays the animation on its own, in a loop, as the GIF defines it.
+      const img = el("img", "gif-image");
+      img.src = ctx.uploadUrl(options.image);
+      img.alt = "";
+      img.decoding = "async";
+      tile.append(img);
+    } else {
+      tile.append(el("p", "placeholder", strings.noGif));
     }
     return { render() {} };
   },

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { clearUploads, collectConsole, ensureAdmin, getSettings, putSettings, signIn, upload } from "./helpers.js";
+import { GIF, clearUploads, collectConsole, ensureAdmin, getSettings, putSettings, signIn, upload } from "./helpers.js";
 
 const SIZES = [
   { name: "720p", width: 1280, height: 720 },
@@ -110,6 +110,7 @@ for (const size of SIZES) {
 
 test("every widget type at every size: nothing overflows, nothing is cut", async ({ page }, testInfo) => {
   const image = await upload(page.request, "bild.png");
+  const animation = await upload(page.request, "animation.gif", GIF);
   const settings = structuredClone(defaults);
   settings.logo = image.id;
   settings.widgets = [
@@ -127,7 +128,8 @@ test("every widget type at every size: nothing overflows, nothing is cut", async
     { id: "message", type: "message", x: 4, y: 5, w: 3, h: 3, options: {
       title: "Herzlich willkommen, liebe Gäste aus Unterlüß", body: "Besprechung im Raum „Fulda“ ab 10 Uhr.\nKaffee steht bereit.", size: "large", highlight: true,
     } },
-    { id: "slideshow", type: "slideshow", x: 7, y: 6, w: 3, h: 2, options: { images: [image.id], seconds: 5 } },
+    { id: "slideshow", type: "slideshow", x: 7, y: 6, w: 2, h: 2, options: { images: [image.id], seconds: 5 } },
+    { id: "gif", type: "gif", x: 9, y: 6, w: 1, h: 2, options: { image: animation.id } },
   ];
   await putSettings(page.request, settings);
 
@@ -142,6 +144,7 @@ test("every widget type at every size: nothing overflows, nothing is cut", async
     await expect(page.locator(".tile-stock .stock-price")).toHaveText(/^1\.8\d\d,\d\d\s€$/);
     await expect(page.locator(".tile-transit .departure").first()).toBeVisible();
     await expect.poll(() => page.locator(".tile-logo .logo-image").evaluate((img) => img.naturalWidth)).toBe(8);
+    await expect.poll(() => page.locator(".tile-gif .gif-image").evaluate((img) => img.naturalWidth)).toBe(8);
     const report = await layoutReport(page);
     expect(report.scroll, `${size.name}: no scrolling`).toEqual(report.viewport);
     expect(report.tilesInside, `${size.name}: tiles inside`).toBe(true);

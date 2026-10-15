@@ -56,9 +56,11 @@ function textControl(spec, value, commit) {
 }
 
 function imageControl(spec, value, commit, uploads) {
+  // "accept" limits the choice to some formats; upload ids end in the format the server detected.
+  const choices = spec.accept ? uploads.filter((upload) => spec.accept.includes(upload.id.split(".").pop())) : uploads;
   const select = h("select", { class: "input", onChange: () => commit(select.value || null) });
-  select.append(h("option", { value: "", text: t.companyLogo, selected: !value }));
-  for (const upload of uploads) select.append(h("option", { value: upload.id, text: upload.name, selected: upload.id === value }));
+  select.append(h("option", { value: "", text: spec.accept ? t.noImageChosen : t.companyLogo, selected: !value }));
+  for (const upload of choices) select.append(h("option", { value: upload.id, text: upload.name, selected: upload.id === value }));
   return select;
 }
 

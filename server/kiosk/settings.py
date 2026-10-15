@@ -112,6 +112,10 @@ def _option(spec, value, path, upload_ids):
         if value is None:
             return None
         _require(upload_ids is None or value in upload_ids, "Das gewählte Bild gibt es nicht mehr.", path)
+        # Upload ids end in the type the bytes showed, so "accept" can rely on the suffix.
+        accept = spec.get("accept")
+        _require(not accept or (isinstance(value, str) and value.rsplit(".", 1)[-1] in accept),
+                 f"Bitte ein Bild im Format {' oder '.join(item.upper() for item in accept or [])} wählen.", path)
         return value
     if kind == "images":
         _require(isinstance(value, list), "Bitte Bilder auswählen.", path)
